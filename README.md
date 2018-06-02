@@ -1,1 +1,3 @@
 # hath
+
+Ethereum transaction utility
