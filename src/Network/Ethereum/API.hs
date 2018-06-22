@@ -15,12 +15,14 @@ import           Lens.Micro
 
 import           Network.Ethereum.API.Utils as API
 import           Network.Ethereum.API.Tx as API
+import           Network.Ethereum.Crypto
 import           Network.Ethereum.Prelude
 
 
 methods :: Map.Map String (JsonMethod, String)
 methods = Map.fromList
   [ ("encodeTx",       (encodeTx, "Encode a transaction to rlp"))
+  , ("keyPair",        (secp256k1KeyPair, "Generate key pair"))
   ]
 
 
@@ -49,15 +51,14 @@ wrapJson = either wrapJsonError wrapSuccess
     wrapJsonError val = object ["error" .= val]
 
 
--- secp256k1KeyPair :: JsonMethod
--- secp256k1KeyPair _ = do
---   sk <- lift $ withSource getEntropy genPrvKey
---   let wif = decodeUtf8 $ toWif sk
---       pk = derivePubKey sk
---   return $ object [ "pubKey" .= pk
---                   , "wif" .= wif
---                   , "addr" .= pubKeyAddr pk
---                   ]
+secp256k1KeyPair :: JsonMethod
+secp256k1KeyPair _ = do
+  sk <- lift genSecKey
+  let pk = derivePubKey sk
+  return $ object [ "pubKey" .= (show pk)
+                  , "sk" .= show sk
+                  , "address" .= show (pubKeyAddr pk)
+                  ]
 
 
 showErrorClasses :: JsonMethod

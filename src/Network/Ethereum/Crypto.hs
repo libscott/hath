@@ -4,8 +4,9 @@ module Network.Ethereum.Crypto
   ( module Crypto.Secp256k1
   , Address(..)
   , Signature
-  , pubkeyToAddress
+  , pubKeyAddr
   , genSecKey
+  , sha3
   ) where
 
 
@@ -46,12 +47,14 @@ instance ToJSON Address where
   toJSON (Address a) = toJSON $ show a
 
 
+sha3 :: ByteString -> ByteString
+sha3 bs = BS.pack (BA.unpack (hash bs :: Digest Keccak_256))
 
-pubkeyToAddress :: PubKey -> Address
-pubkeyToAddress pk =
+
+pubKeyAddr :: PubKey -> Address
+pubKeyAddr pk =
   let bs = exportPubKey True pk
-      h = (hash bs :: Digest Keccak_256)
-   in Address $ BS.pack $ Prelude.drop 12 $ BA.unpack h
+   in Address $ BS.drop 12 $ sha3 bs
 
 
 genSecKey :: IO SecKey
