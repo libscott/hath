@@ -4,6 +4,18 @@ Ethereum transaction utility for offline signing.
 
 Not very polished, probably never will be, might be good reference material though.
 
+## Installation
+
+```
+$ curl -sSL https://get.haskellstack.org/ | sudo sh
+[...] Installed haskell-stack
+$ git clone https://github.com/libscott/hath
+$ cd hath
+$ stack install
+[...]
+Copied executables to /home/scott/.local/bin:
+- hath
+```
 ## Usage
 
 ```sh
