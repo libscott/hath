@@ -2,9 +2,9 @@
 
 module Network.Ethereum.Transaction.Types where
 
-
 import           Data.Aeson.Types
 import           Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BS8
 
 import           Blockchain.Data.RLP
 import           Network.Ethereum.Data.Aeson
@@ -59,8 +59,8 @@ instance RLPSerializable Transaction where
         tail = case (_from tx) of 
           (Signed (CompactRecSig r s v)) ->
               [ rlpEncode (v' + fromIntegral v)
-              , rlpEncode $ fromShort r
-              , rlpEncode $ fromShort s
+              , rlpEncode $ BS8.dropWhile (=='\x00') $ fromShort r
+              , rlpEncode $ BS8.dropWhile (=='\x00') $ fromShort s
               ]
           _ -> [rlpEncode $ _chainId tx, RLPString "", RLPString ""]
 
@@ -77,11 +77,12 @@ instance RLPSerializable Transaction where
   rlpDecode (RLPArray [n,gp,g,to,val,d,v,r,s]) =
     let tx = rlpDecode $ RLPArray [n,gp,g,to,val,d]
         v' = rlpDecode v :: Integer
-        [r',s'] = toShort . rlpDecode <$> [r,s]
+        pad32 "" = ""
+        pad32 bs = if BS8.length bs < 32 then pad32 ("\x00" <> bs) else bs
+        [r',s'] = toShort . pad32 . rlpDecode <$> [r,s]
         c' = quot (v' - 35) 2
         crs = Signed $ CompactRecSig r' s' $ fromIntegral $ v' - (c' * 2 + 35)
-        (cid,f) = case (r',s') of ("","") -> (v', Nobody)
-                                  _       -> (c', crs)
+        (cid,f) = if (r',s') == ("","") then (v',Nobody) else (c',crs)
      in tx { _from = f, _chainId = cid }
 
   rlpDecode _ = error "Invalid RLP Transaction"
