@@ -41,8 +41,9 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps:
 - ethereum-rlp-0.1.0
-- secp256k1-0.5.2
 - aeson-quick-0.1.2.0
+- git: git@github.com:libscott/secp256k1-haskell.git
+  commit: c1b25d0
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

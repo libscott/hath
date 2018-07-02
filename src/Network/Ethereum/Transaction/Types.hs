@@ -46,24 +46,27 @@ data Transaction = Tx
 
 instance RLPSerializable Transaction where
   rlpEncode tx =
-    let toRlpFrom (Signed (CompactRecSig r s v)) =
-              [ rlpEncode (27 + fromIntegral v :: Integer)
+    let body = [ rlpEncode $ _nonce tx
+               , rlpEncode $ _gasPrice tx
+               , rlpEncode $ _gas tx
+               , rlpEncode $ maybe "" fromAddress $ _to tx
+               , rlpEncode $ _value tx
+               , rlpEncode $ _data tx
+               ]
+
+        v' = _chainId tx * 2 + 35 :: Integer
+        
+        tail = case (_from tx) of 
+          (Signed (CompactRecSig r s v)) ->
+              [ rlpEncode (v' + fromIntegral v)
               , rlpEncode $ fromShort r
               , rlpEncode $ fromShort s
               ]
-        toRlpFrom _ = []
+          _ -> [rlpEncode $ _chainId tx, RLPString "", RLPString ""]
 
-        items = [ rlpEncode $ _nonce tx
-                , rlpEncode $ _gasPrice tx
-                , rlpEncode $ _gas tx
-                , rlpEncode $ maybe "" fromAddress $ _to tx
-                , rlpEncode $ _value tx
-                , rlpEncode $ _data tx
-                ] ++ toRlpFrom (_from tx)
+    in RLPArray $ body ++ tail
 
-     in RLPArray items
-
-  rlpDecode (RLPArray [n,gp,g,to,val,d]) = 
+  rlpDecode (RLPArray [n,gp,g,to,val,d]) =
     let sto = rlpDecode to
         mto = case BS.length sto of
                    20 -> Just (Address sto)
@@ -75,11 +78,11 @@ instance RLPSerializable Transaction where
     let tx = rlpDecode $ RLPArray [n,gp,g,to,val,d]
         v' = rlpDecode v :: Integer
         [r',s'] = toShort . rlpDecode <$> [r,s]
-        from = if [rlpDecode r, rlpDecode s] == [0,0::Integer]
-                       then Nobody
-                       else Signed crs
-        crs = CompactRecSig r' s' $ fromIntegral v'
-     in tx { _from = from }
+        c' = quot (v' - 35) 2
+        crs = Signed $ CompactRecSig r' s' $ fromIntegral $ v' - (c' * 2 + 35)
+        (cid,f) = case (r',s') of ("","") -> (v', Nobody)
+                                  _       -> (c', crs)
+     in tx { _from = f, _chainId = cid }
 
   rlpDecode _ = error "Invalid RLP Transaction"
 

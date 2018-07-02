@@ -64,3 +64,9 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - hath
+    - tasty
+    - tasty-hunit
+    - tasty-golden
+    - smallcheck
+    - tasty-smallcheck
+
