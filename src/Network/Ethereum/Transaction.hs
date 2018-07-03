@@ -13,7 +13,7 @@ import Network.Ethereum.Transaction.Types as ALL
 
 
 withoutSig :: Transaction -> Transaction
-withoutSig tx = tx { _from = Nobody }
+withoutSig tx = tx { _sig = Nothing }
 
 encodeTx :: Transaction -> ByteString
 encodeTx = rlpSerialize . rlpEncode
@@ -26,12 +26,11 @@ signTx tx sk =
   let payload = txid tx
       Just recSig = signRecMsg sk <$> msg payload
       sig = exportCompactRecSig recSig
-   in tx { _from = Signed sig }
+   in tx { _sig = Just sig }
 
 recoverFrom :: Transaction -> Maybe PubKey
-recoverFrom tx@(Tx { _from = (Signed crs) }) = do
+recoverFrom tx = do
+  rs <- _sig tx >>= importCompactRecSig
   message <- msg $ txid tx
-  rs <- importCompactRecSig crs
   recover rs message
-recoverFrom _ = Nothing
 

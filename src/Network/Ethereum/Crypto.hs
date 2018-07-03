@@ -3,8 +3,7 @@
 module Network.Ethereum.Crypto
   ( module Crypto.Secp256k1
   , Address(..)
-  , ByteString(..)
-  , Signature
+  , CompactRecSig(..)
   , pubKeyAddr
   , genSecKey
   , sha3
@@ -14,37 +13,52 @@ module Network.Ethereum.Crypto
 import           Crypto.Hash
 import           Crypto.Secp256k1
 
-import           Data.Aeson.Types
 import qualified Data.ByteArray as BA
 import           Data.ByteString as BS
-import           Data.ByteString.Char8 as B8
+import           Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Base16 as B16
 import           Data.Monoid
 import qualified Data.Text as T
 
+import           Network.Ethereum.Data.Aeson
 import           Network.Ethereum.Prelude
 
 import           System.Entropy
 
 
-type Signature = CompactRecSig
-
 newtype Address = Address { fromAddress :: ByteString }
   deriving (Eq)
 
 instance Show Address where
-  show (Address bs) = B8.unpack (B16.encode bs)
+  show (Address bs) = BS8.unpack (B16.encode bs)
 
 instance FromJSON Address where
   parseJSON (String s) =
     let r = if T.take 2 s == "0x" then T.drop 2 s else s
      in if T.length r == 40
-           then Address <$> parseJSON (String r)
+           then Address <$> fromJsonHex (String r)
            else fail "Invalid Address"
   parseJSON _ = fail "Invalid Address"
 
 instance ToJSON Address where
-  toJSON (Address bs) = toJSON bs
+  toJSON (Address bs) = toJsonHex bs
+
+
+-- Orphan instance for CompactRecSig
+instance ToJSON CompactRecSig where
+  toJSON (CompactRecSig r s v) = toJsonHex $
+    fromShort r <> fromShort s <> (if v == 0 then "\x00" else "\x01")
+
+instance FromJSON CompactRecSig where
+  parseJSON s@(String _) = do
+    bs <- fromJsonHex s
+    let (r, rest) = BS8.splitAt 32 bs
+        (s, v)    = BS8.splitAt 32 rest
+        f = pure . CompactRecSig (toShort r) (toShort s)
+    case v of "\x00" -> f 0
+              "\x01" -> f 1
+              _      -> fail "Sig invalid"
+  parseJSON _ = fail "Sig wrong type"
 
 
 sha3 :: ByteString -> ByteString
@@ -61,14 +75,3 @@ genSecKey = do
   case secKey bytes of
        Just sk -> pure sk
        Nothing -> fail "IO error generating secret key"
-
-
-instance ToJSON ByteString where
-  toJSON = String . decodeUtf8 . B16.encode
-
-instance FromJSON ByteString where
-  parseJSON (String t) =
-    case B16.decode (encodeUtf8 t) of
-      (s, "") -> pure s
-      _       -> fail "Invalid hex data"
-  parseJSON _ = fail "Not a hex string"

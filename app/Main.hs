@@ -4,7 +4,6 @@ module Main where
 
 import qualified Data.ByteString.Lazy.Char8 as C8L
 
-import           Data.Aeson
 import           Data.Aeson.Encode.Pretty
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
@@ -16,6 +15,7 @@ import           Options.Applicative
 import qualified Network.Ethereum.API as API
 import           Network.Ethereum.API.Tx
 import           Network.Ethereum.Crypto
+import           Network.Ethereum.Data.Aeson hiding (Parser)
 import           Network.Ethereum.Transaction
 import           Network.Ethereum.Prelude
 
@@ -92,7 +92,7 @@ recoverFromMethod :: Parser Method
 recoverFromMethod = pure $ do
   (txBin,_) <- B16.decode <$> lift BS8.getContents
   let tx = rlpDecode $ rlpDeserialize txBin :: Transaction
-      toObj pk = object [ "pub" .= BS.drop 1 (exportPubKey False pk)
+      toObj pk = object [ "pub" .= toJsonHex (BS.drop 1 (exportPubKey False pk))
                         , "addr" .= pubKeyAddr pk
                         ]
   pure $ toJSON $ toObj <$> recoverFrom tx
