@@ -8,6 +8,7 @@ module Network.Ethereum.Transaction
   ) where
 
 import Network.Ethereum.Crypto
+import Network.Ethereum.Data.RLP
 import Network.Ethereum.Prelude
 import Network.Ethereum.Transaction.Types as ALL
 

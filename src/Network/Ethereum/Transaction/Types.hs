@@ -4,8 +4,8 @@ module Network.Ethereum.Transaction.Types where
 
 import qualified Data.ByteString.Char8 as BS8
 
-import           Blockchain.Data.RLP
 import           Network.Ethereum.Data.Aeson
+import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Prelude
 
@@ -37,8 +37,8 @@ instance RLPSerializable Transaction where
 
       encodeSig (CompactRecSig r s v) =
         [ rlpEncode (v' + fromIntegral v)
-        , rlpEncode $ BS8.dropWhile (=='\x00') $ fromShort r
-        , rlpEncode $ BS8.dropWhile (=='\x00') $ fromShort s
+        , rlpEncode $ unpackInteger $ fromShort r
+        , rlpEncode $ unpackInteger $ fromShort s
         ]
 
       noSig = [rlpEncode $ _chainId tx, RLPString "", RLPString ""]

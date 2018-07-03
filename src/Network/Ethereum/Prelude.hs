@@ -13,7 +13,6 @@ import Control.Monad.IO.Class as ALL (liftIO)
 import Control.Monad.Trans.Except as ALL
 import Control.Monad.Trans.Class as ALL
 
-import Blockchain.Data.RLP as ALL
 import Data.ByteString as ALL (ByteString)
 import qualified Data.ByteString.Base16 as B16
 import Data.ByteString.Lazy as ALL (toStrict)

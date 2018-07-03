@@ -40,7 +40,6 @@ packages:
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps:
-- ethereum-rlp-0.1.0
 - aeson-quick-0.1.2.0
 - git: git@github.com:libscott/secp256k1-haskell.git
   commit: c1b25d0
