@@ -20,16 +20,14 @@ Copied executables to /home/scott/.local/bin:
 
 ```sh
 $ hath --help
-Usage: hath [--pretty] COMMAND
+Usage: hath COMMAND
   Ethereum command line utils
 
 Available options:
-  --pretty                 Pretty print output
   -h,--help                Show this help text
 
 Available commands:
   encodeTx                 encode a json transaction
-  json                     json api
   signTx                   sign a transaction on stdin
   decodeTx                 decode a transaction on stdin
   serve                    run server
