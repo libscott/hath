@@ -16,6 +16,7 @@ $ stack install
 Copied executables to /home/scott/.local/bin:
 - hath
 ```
+
 ## Usage
 
 ```sh
