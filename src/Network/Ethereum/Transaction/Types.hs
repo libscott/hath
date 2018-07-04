@@ -55,7 +55,7 @@ instance RLPSerializable Transaction where
     let tx = rlpDecode $ RLPArray [n,gp,g,to,val,d]
 
         pad32 "" = ""
-        pad32 bs = if BS8.length bs < 32 then pad32 ("\x00" <> bs) else bs
+        pad32 bs = if BS8.length bs < 32 then pad32 ("\0" <> bs) else bs
         [r,s] = toShort . pad32 . rlpDecode <$> [_r,_s]
 
         sv = rlpDecode _v
