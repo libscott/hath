@@ -47,7 +47,7 @@ instance ToJSON Address where
 -- Orphan instance for CompactRecSig
 instance ToJSON CompactRecSig where
   toJSON (CompactRecSig r s v) = toJsonHex $
-    fromShort r <> fromShort s <> (if v == 0 then "\x00" else "\x01")
+    fromShort r <> fromShort s <> (if v == 0 then "\0" else "\1")
 
 instance FromJSON CompactRecSig where
   parseJSON s@(String _) = do
@@ -55,8 +55,8 @@ instance FromJSON CompactRecSig where
     let (r, rest) = BS8.splitAt 32 bs
         (s, v)    = BS8.splitAt 32 rest
         f = pure . CompactRecSig (toShort r) (toShort s)
-    case v of "\x00" -> f 0
-              "\x01" -> f 1
+    case v of "\0" -> f 0
+              "\1" -> f 1
               _      -> fail "Sig invalid"
   parseJSON _ = fail "Sig wrong type"
 

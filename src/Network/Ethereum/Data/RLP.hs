@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 
 -- | Code shamelessly taken from https://github.com/blockapps/ethereum-rlp
@@ -105,19 +105,12 @@ rlpSplit input =
     x -> error ("Missing case in rlpSplit: " ++ show x)
 
     
-getRLPObjects::ByteString->[RLPObject]
-getRLPObjects x | B.null x = []
-getRLPObjects theData = obj:getRLPObjects rest
-  where
-    (obj, rest) = rlpSplit theData
+getRLPObjects :: ByteString -> [RLPObject]
+getRLPObjects "" = []
+getRLPObjects theData =
+  let (obj, rest) = rlpSplit theData
+   in obj : getRLPObjects rest
 
-int2Bytes::Int->[Word8]
-int2Bytes val | val < 0x100 = map (fromIntegral . (val `shiftR`)) [0]
-int2Bytes val | val < 0x10000 = map (fromIntegral . (val `shiftR`)) [8, 0]
-int2Bytes val | val < 0x1000000 = map (fromIntegral . (val `shiftR`)) [16,  8, 0]
-int2Bytes val | val < 0x100000000 = map (fromIntegral . (val `shiftR`)) [24, 16..0]
-int2Bytes val | val < 0x10000000000 = map (fromIntegral . (val `shiftR`)) [32, 24..0]
-int2Bytes _ = error "int2Bytes not defined for val >= 0x10000000000."
 
 rlp2Bytes::RLPObject->[Word8]
 rlp2Bytes (RLPScalar val) = [fromIntegral val]
@@ -125,11 +118,11 @@ rlp2Bytes (RLPString s) | B.length s <= 55 = 0x80 + fromIntegral (B.length s):B.
 rlp2Bytes (RLPString s) =
   [0xB7 + fromIntegral (length lengthAsBytes)] ++ lengthAsBytes ++ B.unpack s
   where
-    lengthAsBytes = int2Bytes $ B.length s
+    lengthAsBytes = integerToBytes $ B.length s
 rlp2Bytes (RLPArray innerObjects) =
   if length innerBytes <= 55
   then 0xC0 + fromIntegral (length innerBytes):innerBytes
-  else let lenBytes = int2Bytes $ length innerBytes
+  else let lenBytes = integerToBytes $ length innerBytes
        in [0xF7 + fromIntegral (length lenBytes)] ++ lenBytes ++ innerBytes
   where
     innerBytes = concat $ rlp2Bytes <$> innerObjects
@@ -162,12 +155,6 @@ instance RLPSerializable Integer where
   rlpDecode (RLPString s) = unpackInteger s
   rlpDecode (RLPArray _)  = error "rlpDecode called for Integer for array"
 
-instance RLPSerializable String where
-  rlpEncode s = rlpEncode $ BC.pack s
-
-  rlpDecode (RLPString s) = BC.unpack s
-  rlpDecode (RLPScalar n) = [w2c $ fromIntegral n]
-  rlpDecode (RLPArray x) = error $ "Malformed RLP in call to rlpDecode for String: RLPObject is an array: " ++ show (pretty x)
 
 instance RLPSerializable B.ByteString where
     rlpEncode x | B.length x == 1 && B.head x < 128 = RLPScalar $ B.head x
@@ -223,11 +210,15 @@ instance
   rlpDecode x = error $ "rlpDecode for 6-tuples not defined for " ++ show x
 
 
-packInteger :: Integer -> B.ByteString 
-packInteger = B.pack . reverse . pack
+packInteger :: Integer -> B.ByteString
+packInteger = B.pack . integerToBytes
+
+
+integerToBytes :: (Bits a, Integral a) => a -> [Word8]
+integerToBytes = reverse . pack
   where
     pack 0 = []
-    pack x = fromInteger (x .&. 255) : pack (x `shiftR` 8)
+    pack x = fromIntegral (x .&. 255) : pack (x `shiftR` 8)
 
 
 unpackInteger :: B.ByteString -> Integer
