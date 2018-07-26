@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Network.Ethereum.Data.Aeson
+module Network.Hath.Data.Aeson
   ( module DA
-  , module DAT 
   , StrictObject
   , withStrictObject
   , (.:-)
@@ -13,7 +12,8 @@ module Network.Ethereum.Data.Aeson
 
 
 import           Data.Aeson as DA
-import           Data.Aeson.Types as DAT
+import           Data.Aeson.Types as DA
+import           Data.Aeson.Quick as DA ((.?), (.%))
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as B16
 import           Data.IORef
@@ -21,6 +21,9 @@ import           Data.HashMap.Strict
 import qualified Data.Set as Set
 import           Data.Text
 import           Data.Text.Encoding
+
+
+import           Language.Evm
 
 import           System.IO.Unsafe
 

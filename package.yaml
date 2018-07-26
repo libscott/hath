@@ -23,17 +23,23 @@ dependencies:
 - base >= 4.7 && < 5
 - aeson
 - aeson-pretty
+- aeson-quick
 - ansi-wl-pprint
 - attoparsec
 - base16-bytestring
 - bytestring
+- conduit
+- conduit-extra
 - containers
 - cryptonite
 - entropy
+- hassembly-evm
+- network
 - memory
 - microlens
 - microlens-platform
 - microlens-aeson
+- ndjson-conduit
 - optparse-applicative
 - secp256k1
 - text

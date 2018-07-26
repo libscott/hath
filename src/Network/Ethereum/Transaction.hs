@@ -9,7 +9,7 @@ module Network.Ethereum.Transaction
 
 import Network.Ethereum.Crypto
 import Network.Ethereum.Data.RLP
-import Network.Ethereum.Prelude
+import Network.Hath.Prelude
 import Network.Ethereum.Transaction.Types as ALL
 
 

@@ -4,7 +4,7 @@ import Control.Monad ((>=>))
 
 import Data.Aeson.Types
 
-import Network.Ethereum.Prelude
+import Network.Hath.Prelude
 
 
 type JsonMethod = Value -> ExceptT Err IO Value

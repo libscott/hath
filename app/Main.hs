@@ -11,13 +11,16 @@ import qualified Data.Map as Map
 
 import           Options.Applicative
 
+import           Network.Ethereum.Contracts
 import           Network.Ethereum.Crypto
-import           Network.Ethereum.Data.Aeson hiding (Parser)
 import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Transaction
-import           Network.Ethereum.Prelude
 
-import           Network.Hath.Server
+import           Network.Hath.Bridge
+import           Network.Hath.Data.Aeson hiding (Parser)
+import           Network.Hath.Prelude
+
+import           Language.Evm (codegen)
 
 import           System.Exit
 import           System.IO
@@ -35,13 +38,16 @@ jsonArgAny = eitherReader $ eitherDecode . fromString
 
 
 topMethods :: Parser Method
-topMethods = subparser $ etm <> stx <> dtx <> serve <> recover <> txd
-  where etm = command "encodeTx" $ info encodeTxMethod (progDesc "encode a json transaction")
-        stx = command "signTx" $ info signTxMethod (progDesc "sign a transaction on stdin")
-        dtx = command "decodeTx" $ info decodeTxMethod (progDesc "decode a transaction on stdin")
-        serve = command "serve" $ info serveMethod (progDesc "run server")
-        recover = command "recover" $ info recoverFromMethod (progDesc "recover address")
-        txd = command "txid" $ info txidMethod (progDesc "get transaction id")
+topMethods =
+  subparser $
+     (command "encodeTx" $ info encodeTxMethod $ progDesc "encode a json transaction")
+  <> (command "signTx" $ info signTxMethod $ progDesc "sign a transaction on stdin")
+  <> (command "decodeTx" $ info decodeTxMethod $ progDesc "decode a transaction on stdin")
+  <> (command "recover" $ info recoverFromMethod $ progDesc "recover address")
+  <> (command "txid" $ info txidMethod $ progDesc "get transaction id")
+  <> (command "keyPair" $ info keyPairMethod $ progDesc "generate a priv/pub key pair")
+  <> (command "delegatecallProxy" $ info delegatecallMethod $ progDesc "get code for proxy contract")
+  <> (command "runBridge" $ info runBridgeMethod $ progDesc "run bridge")
 
 
 parseOpts :: ParserInfo Method
@@ -92,8 +98,23 @@ txidMethod = pure $ do
   pure $ toJSON $ BS8.unpack $ B16.encode $ txid tx
 
 
-serveMethod :: Parser Method
-serveMethod = pure $ serve >> pure Null
+keyPairMethod :: Parser Method
+keyPairMethod = pure $ do
+  sk <- genSecKey
+  let pk = derivePubKey sk
+  return $ object [ "secKey" .= show sk
+                  , "pubKey" .= show pk
+                  , "addr" .= pubKeyAddr pk
+                  ]
+
+
+delegatecallMethod :: Parser Method
+delegatecallMethod = act <$> argument auto (metavar "target contract address")
+  where act addr = putStrLn (codegen $ delegatecallCode addr) >> pure Null
+  
+
+runBridgeMethod :: Parser Method
+runBridgeMethod = pure $ bridge >> pure Null
 
 
 main :: IO ()

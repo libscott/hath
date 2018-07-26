@@ -14,14 +14,14 @@ import           Crypto.Hash
 import           Crypto.Secp256k1
 
 import qualified Data.ByteArray as BA
-import           Data.ByteString as BS
-import           Data.ByteString.Char8 as BS8
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Base16 as B16
 import           Data.Monoid
 import qualified Data.Text as T
 
-import           Network.Ethereum.Data.Aeson
-import           Network.Ethereum.Prelude
+import           Network.Hath.Data.Aeson
+import           Network.Hath.Prelude
 
 import           System.Entropy
 
@@ -31,6 +31,13 @@ newtype Address = Address { fromAddress :: ByteString }
 
 instance Show Address where
   show (Address bs) = BS8.unpack (B16.encode bs)
+
+instance Read Address where
+  readsPrec p s =
+    if length s == 22 && take 2 s == "0x"
+       then let (a,b) = B16.decode $ fromString $ drop 2 s
+             in [(Address a, BS8.unpack b)]
+       else []
 
 instance FromJSON Address where
   parseJSON (String s) =

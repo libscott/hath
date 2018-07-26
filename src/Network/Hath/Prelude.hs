@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Network.Ethereum.Prelude
+module Network.Hath.Prelude
   ( module ALL
   , exceptToFail
   , fromHex

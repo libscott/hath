@@ -12,7 +12,7 @@ import           Lens.Micro
 
 import           Network.Ethereum.API.Utils as API
 import           Network.Ethereum.Crypto
-import           Network.Ethereum.Prelude
+import           Network.Hath.Prelude
 
 
 wrapJson :: Either Err Value -> Value
