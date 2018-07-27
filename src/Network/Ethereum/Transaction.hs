@@ -9,8 +9,9 @@ module Network.Ethereum.Transaction
 
 import Network.Ethereum.Crypto
 import Network.Ethereum.Data.RLP
-import Network.Hath.Prelude
 import Network.Ethereum.Transaction.Types as ALL
+
+import Network.Hath.Prelude
 
 
 withoutSig :: Transaction -> Transaction

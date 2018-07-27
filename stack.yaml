@@ -15,7 +15,7 @@
 # resolver:
 #  name: custom-snapshot
 #  location: "./custom-snapshot.yaml"
-resolver: lts-11.11
+resolver: lts-10.1
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -37,15 +37,23 @@ resolver: lts-11.11
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - .
+
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps:
+- murmur3-1.0.3
+- pbkdf-1.1.1.1
 - aeson-quick-0.1.2.0
 - git: git@github.com:libscott/secp256k1-haskell.git
   commit: c1b25d0
 - git: git@github.com:libscott/hassembly-evm.git
   commit: f1f0f7f0b1480b1e727501a078565e30b384cd80
+- git: git@github.com:haskoin/haskoin.git
+  commit: 3279f5c
+  subdirs:
+  - haskoin-core
 #- ../haskell-ethereum-assembly
+#- haskoin-core-0.4.2
 
 
 # Override default flag values for local packages and extra-deps

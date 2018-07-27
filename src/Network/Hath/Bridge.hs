@@ -3,7 +3,6 @@
 module Network.Hath.Bridge where
 
 import           Data.Conduit hiding (connect)
-import           Data.Conduit.Combinators (headDef)
 import           Data.Conduit.JSON.NewlineDelimited
 import qualified Data.Conduit.List as CL
 import           Data.Conduit.Network
@@ -23,9 +22,10 @@ queryJsonRPC sock method params = do
                       (Nothing, Just r) -> Right r
                       (Just e, _)       -> Left e
                       _                 -> Left ("Unexpected response" ++ show v)
+      mResponse = maybe (Left "No response") id <$> await
   out <- runConduit $ do
       yield req .| serializer .| sinkSocket sock
-      sourceSocket sock .| eitherParser .| headDef (Left "No response")
+      sourceSocket sock .| eitherParser .| mResponse
   pure $ out >>= interpret
 
 

@@ -1,10 +1,10 @@
 name:                hath
 version:             0.1.0.0
-github:              "githubuser/hath"
+github:              "libscott/hath"
 license:             BSD3
-author:              "Author name here"
+author:              "Scott Sadler"
 maintainer:          "example@example.com"
-copyright:           "2018 Author name here"
+copyright:           "2018 Scott Sadler"
 
 extra-source-files:
 - README.md
@@ -28,11 +28,13 @@ dependencies:
 - attoparsec
 - base16-bytestring
 - bytestring
+- cereal
 - conduit
 - conduit-extra
 - containers
 - cryptonite
 - entropy
+- haskoin-core
 - hassembly-evm
 - network
 - memory
@@ -41,6 +43,7 @@ dependencies:
 - microlens-aeson
 - ndjson-conduit
 - optparse-applicative
+- QuickCheck
 - secp256k1
 - text
 - transformers
