@@ -9,16 +9,20 @@ import           Prelude hiding (return)
 
 delegatecallInitCode :: Integer -> EvmAsm
 delegatecallInitCode addr = do
-  let sublen = fromIntegral $ length $ codegen $ delegatecallCode addr
-  push2 $ sublen
+  let codeLen = fromIntegral . length . codegen
+      innerCode = delegatecallCode addr
+
+  -- this header is 14 bytes
+  let initLen = 14
+  push2 $ codeLen innerCode
   dup1
-  push2 14
+  push2 initLen
   push1 0
   codecopy
-  push2 (14 + sublen)
-  jump
-  delegatecallCode addr
-  jumpdest
+  _jump "_skip"
+
+  innerCode
+  _dest "_skip"
   push1 0
   return
 
