@@ -54,7 +54,7 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Ethereum command line utils"
         <> (command "txid"      $ infoH txidMethod        $ progDesc "get transaction id")
 
     contractMethods = subparser $
-           (command "delegatecallProxy" $ infoH delegatecallMethod $ progDesc "get code for proxy contract")
+           (command "contractProxy" $ infoH contractProxyMethod $ progDesc "get code for proxy contract")
 
     bridgeMethods = subparser $
            (command "initKMD" $ infoH initKMDBridgeMethod $ progDesc "init KMD bridge")
@@ -119,12 +119,12 @@ keyPairMethod = pure $ jsonMethod $ do
                   ]
 
 
-delegatecallMethod :: Parser Method
-delegatecallMethod = act <$> optInit <*> argAddress
+contractProxyMethod :: Parser Method
+contractProxyMethod = act <$> optInit <*> argAddress
   where act doInit addr =
-          let code = if doInit then delegatecallInitCode addr
-                               else delegatecallCode addr
-           in putStrLn (codegen code)
+          let code = if doInit then initEvmContract $ contractProxy addr
+                               else contractProxyCode addr
+           in putStrLn code
         argAddress = argument auto (metavar "target contract address")
         optInit = switch $ long "init" <> short 'i' <> help "Return code for contract init"
 

@@ -2,33 +2,38 @@
 module Network.Ethereum.Contracts where
 
 import           Language.Evm
+import           Language.Evm.Types
 
 import           Prelude hiding (return)
 
 
+initEvmContract :: EvmAsm -> EvmCode
+initEvmContract body =
+  let bodyLen = length $ codegen body
+      initLen = 14
+      wrapped = codegen $ do
+        -- <initLen> (count the bytes)
+        push2 $ fromIntegral bodyLen  -- 3
+        dup1                          -- 1
+        push2 $ fromIntegral initLen  -- 3
+        push1 0                       -- 2
+        codecopy                      -- 1
+        _jump "_skip"                 -- 4
+        -- </initLen>
+        body
+        _dest "_skip"
+        push1 0
+        return
+        -- Neccesary to splice generated code in so that jump destinations are correct for revert
+  in  take (initLen*2) wrapped ++
+      codegen body ++
+      drop (initLen*2+bodyLen) wrapped
 
-delegatecallInitCode :: Integer -> EvmAsm
-delegatecallInitCode addr = do
-  let codeLen = fromIntegral . length . codegen
-      innerCode = delegatecallCode addr
+contractProxyCode :: Integer -> EvmCode
+contractProxyCode = codegen . contractProxy
 
-  -- this header is 14 bytes
-  let initLen = 14
-  push2 $ codeLen innerCode
-  dup1
-  push2 initLen
-  push1 0
-  codecopy
-  _jump "_skip"
-
-  innerCode
-  _dest "_skip"
-  push1 0
-  return
-
-
-delegatecallCode :: Integer -> EvmAsm
-delegatecallCode addr = do
+contractProxy :: Integer -> EvmAsm
+contractProxy addr = do
   -- First thing, copy call data to memory
   calldatasize
   push1 0
