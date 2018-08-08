@@ -4,11 +4,15 @@ module Network.Ethereum.Crypto
   ( module Crypto.Secp256k1
   , Address(..)
   , CompactRecSig(..)
+  , Ident
   , pubKeyAddr
   , genSecKey
+  , loadSecret
   , sha3
   ) where
 
+
+import           Control.Monad.Fail (MonadFail)
 
 import           Crypto.Hash
 import           Crypto.Secp256k1
@@ -20,6 +24,7 @@ import qualified Data.ByteString.Base16 as B16
 import           Data.Monoid
 import qualified Data.Text as T
 
+import           Network.Ethereum.Data.Hex
 import           Network.Hath.Data.Aeson
 import           Network.Hath.Prelude
 
@@ -30,22 +35,23 @@ newtype Address = Address { fromAddress :: ByteString }
   deriving (Eq)
 
 instance Show Address where
-  show (Address bs) = BS8.unpack (B16.encode bs)
+  show (Address bs) = "0x" <> BS8.unpack (B16.encode bs)
 
 instance Read Address where
   readsPrec p s =
-    if length s == 22 && take 2 s == "0x"
+    if length s == 42 && take 2 s == "0x"
        then let (a,b) = B16.decode $ fromString $ drop 2 s
              in [(Address a, BS8.unpack b)]
        else []
 
+instance IsString Address where
+  fromString = read
+
 instance FromJSON Address where
-  parseJSON (String s) =
-    let r = if T.take 2 s == "0x" then T.drop 2 s else s
-     in if T.length r == 40
-           then Address <$> fromJsonHex (String r)
-           else fail "Invalid Address"
-  parseJSON _ = fail "Invalid Address"
+  parseJSON val = do
+    Hex bs <- parseJSON val
+    if BS.length bs == 20 then pure $ Address bs
+                          else fail "Invalid Address"
 
 instance ToJSON Address where
   toJSON (Address bs) = toJsonHex bs
@@ -75,6 +81,13 @@ sha3 bs = BS.pack (BA.unpack (hash bs :: Digest Keccak_256))
 pubKeyAddr :: PubKey -> Address
 pubKeyAddr = Address . BS.drop 12 . sha3 . BS.drop 1 . exportPubKey False
 
+type Ident = (SecKey, PubKey, Address)
+
+loadSecret :: MonadFail m => ByteString -> m Ident
+loadSecret secretBS = do
+  sk <- maybe (fail "Invalid SK bytes?") pure $ secKey secretBS
+  let pk = derivePubKey sk
+  pure (sk, pk, pubKeyAddr pk)
 
 genSecKey :: IO SecKey
 genSecKey = do

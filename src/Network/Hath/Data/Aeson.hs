@@ -4,6 +4,7 @@ module Network.Hath.Data.Aeson
   ( module DA
   , StrictObject
   , withStrictObject
+  , (.@)
   , (.:-)
   , (.:-?)
   , fromJsonHex
@@ -11,9 +12,12 @@ module Network.Hath.Data.Aeson
   ) where
 
 
-import           Data.Aeson as DA
+import           Control.Monad.Except
+
+import           Data.Aeson as DA hiding (Parser, decode)
 import           Data.Aeson.Types as DA
-import           Data.Aeson.Quick as DA ((.?), (.%))
+import           Data.Aeson.Quick as DA (build, (.?), (.!), (.%))
+import           Data.Aeson.Quick (extract, Structure)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as B16
 import           Data.IORef
@@ -22,23 +26,22 @@ import qualified Data.Set as Set
 import           Data.Text
 import           Data.Text.Encoding
 
-
 import           Language.Evm
 
 import           System.IO.Unsafe
 
 
-
 fromJsonHex :: Value -> Parser ByteString
-fromJsonHex (String t) =
+fromJsonHex v = do
+  t <- parseJSON v
   case B16.decode (encodeUtf8 t) of (r,"") -> pure r
-                                    _      -> fail "bad hex data"
-fromJsonHex _ = fail "not a string"
-
+                                    _      -> fail "Invalid hex data"
 
 toJsonHex :: ByteString -> Value
 toJsonHex = String . decodeUtf8 . B16.encode
 
+(.@) :: (FromJSON a, Monad m) => Value -> Structure -> ExceptT String m a
+(.@) val str = ExceptT $ pure $ parseEither (extract str) val
 
 data StrictObject = StrictObject Object (IORef (Set.Set Text))
 

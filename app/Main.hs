@@ -17,8 +17,11 @@ import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Transaction
 
 import           Network.Hath.Bridge
+import           Network.Hath.Bridge.KMD
 import           Network.Hath.Data.Aeson hiding (Parser)
+import           Network.Hath.Monad
 import           Network.Hath.Prelude
+import qualified Network.Haskoin.Internals as H
 
 import           Language.Evm (codegen)
 
@@ -26,41 +29,50 @@ import           System.Exit
 import           System.IO
 
 
-type Method = IO Value
+main :: IO ()
+main = join $ customExecParser (prefs showHelpOnEmpty) parseAct
 
+type Method = IO ()
 
-jsonArg :: ReadM Value
-jsonArg = eitherReader $ eitherDecode . fromString
-
-
-jsonArgAny :: FromJSON a => ReadM a
-jsonArgAny = eitherReader $ eitherDecode . fromString
-
-
-topMethods :: Parser Method
-topMethods =
-  subparser $
-     (command "encodeTx" $ info encodeTxMethod $ progDesc "encode a json transaction")
-  <> (command "signTx" $ info signTxMethod $ progDesc "sign a transaction on stdin")
-  <> (command "decodeTx" $ info decodeTxMethod $ progDesc "decode a transaction on stdin")
-  <> (command "recover" $ info recoverFromMethod $ progDesc "recover address")
-  <> (command "txid" $ info txidMethod $ progDesc "get transaction id")
-  <> (command "keyPair" $ info keyPairMethod $ progDesc "generate a priv/pub key pair")
-  <> (command "delegatecallProxy" $ info delegatecallMethod $ progDesc "get code for proxy contract")
-  <> (command "runBridge" $ info runBridgeMethod $ progDesc "run bridge")
-
-
-parseOpts :: ParserInfo Method
-parseOpts = info (parser <**> helper) desc
+parseAct :: ParserInfo Method
+parseAct = infoH topMethods $ fullDesc <> progDesc "Ethereum command line utils"
   where
-    parser = topMethods
-    desc = fullDesc <> progDesc "Ethereum command line utils"
+    infoH m = info $ m <**> helper
+
+    topMethods = subparser $
+           (command "tx"        $ infoH txMethods         $ progDesc "tx methods")
+        <> (command "keyPair"   $ infoH keyPairMethod     $ progDesc "generate a priv/pub key pair")
+        <> (command "contract"  $ infoH contractMethods   $ progDesc "generate contracts")
+        <> (command "runBridge" $ infoH runBridgeMethod   $ progDesc "run bridge")
+        <> (command "bridge"    $ infoH bridgeMethods     $ progDesc "brige modes")
+
+    txMethods = subparser $
+           (command "encode"    $ infoH encodeTxMethod    $ progDesc "encode a json transaction")
+        <> (command "sign"      $ infoH signTxMethod      $ progDesc "sign a transaction on stdin")
+        <> (command "decode"    $ infoH decodeTxMethod    $ progDesc "decode a transaction on stdin")
+        <> (command "from"      $ infoH recoverFromMethod $ progDesc "recover address")
+        <> (command "txid"      $ infoH txidMethod        $ progDesc "get transaction id")
+
+    contractMethods = subparser $
+           (command "delegatecallProxy" $ infoH delegatecallMethod $ progDesc "get code for proxy contract")
+
+    bridgeMethods = subparser $
+           (command "initKMD" $ infoH initKMDBridgeMethod $ progDesc "init KMD bridge")
+        <> (command "runKMD"  $ infoH runKMDBridgeMethod  $ progDesc "run KMD bridge")
+
+
+jsonMethod :: IO Value -> Method
+jsonMethod act = act >>= C8L.putStrLn . encode
+
+
+jsonArg :: FromJSON a => ReadM a
+jsonArg = eitherReader $ eitherDecode . fromString
 
 
 encodeTxMethod :: Parser Method
 encodeTxMethod =
-  let act tx = (BS8.putStrLn $ B16.encode $ encodeTx tx) >> pure Null
-   in act <$> argument jsonArgAny (metavar "JSON TX")
+  let act = BS8.putStrLn . toHex . encodeTx
+   in act <$> argument jsonArg (metavar "JSON TX")
 
 
 signTxMethod :: Parser Method
@@ -70,19 +82,18 @@ signTxMethod = act <$> argument skArg (metavar "secret key")
           (txBin,_) <- B16.decode <$> BS8.getContents
           let tx = rlpDecode $ rlpDeserialize txBin
               signed = signTx tx sk
-          BS8.putStrLn $ B16.encode $ encodeTx signed
-          pure Null
+          BS8.putStrLn $ toHex $ encodeTx signed
 
 
 decodeTxMethod :: Parser Method
-decodeTxMethod = pure $ do
+decodeTxMethod = pure $ jsonMethod $ do
   (txBin,_) <- B16.decode <$> BS8.getContents
   let tx = rlpDecode $ rlpDeserialize txBin :: Transaction
   pure $ toJSON tx
 
 
 recoverFromMethod :: Parser Method
-recoverFromMethod = pure $ do
+recoverFromMethod = pure $ jsonMethod $ do
   (txBin,_) <- B16.decode <$> BS8.getContents
   let tx = rlpDecode $ rlpDeserialize txBin :: Transaction
       toObj pk = object [ "pub" .= toJsonHex (BS.drop 1 (exportPubKey False pk))
@@ -95,11 +106,11 @@ txidMethod :: Parser Method
 txidMethod = pure $ do
   (txBin,_) <- B16.decode <$> BS8.getContents
   let tx = rlpDecode $ rlpDeserialize txBin :: Transaction
-  pure $ toJSON $ BS8.unpack $ B16.encode $ txid tx
+  BS8.putStrLn $ toHex $ txid tx
 
 
 keyPairMethod :: Parser Method
-keyPairMethod = pure $ do
+keyPairMethod = pure $ jsonMethod $ do
   sk <- genSecKey
   let pk = derivePubKey sk
   return $ object [ "secKey" .= show sk
@@ -109,17 +120,22 @@ keyPairMethod = pure $ do
 
 
 delegatecallMethod :: Parser Method
-delegatecallMethod = act <$> argument auto (metavar "target contract address")
-  where act addr = putStrLn (codegen $ delegatecallCode addr) >> pure Null
-  
+delegatecallMethod = act <$> optInit <*> argAddress
+  where act doInit addr =
+          let code = if doInit then delegatecallInitCode addr
+                               else delegatecallCode addr
+           in putStrLn (codegen code)
+        argAddress = argument auto (metavar "target contract address")
+        optInit = switch $ long "init" <> short 'i' <> help "Return code for contract init"
 
 runBridgeMethod :: Parser Method
-runBridgeMethod = pure $ bridge >> pure Null
+runBridgeMethod = pure $ runHathConfigured bridge
 
+initKMDBridgeMethod :: Parser Method
+initKMDBridgeMethod =
+  let act = runHathConfigured . initKMDBridge
+      openingBalanceArg = maybeReader $ H.hexToTxHash . fromString
+   in act <$> argument openingBalanceArg (metavar "Opening Balance")
 
-main :: IO ()
-main = do
-  res <- join $ execParser parseOpts
-  case res of
-     Null -> pure ()
-     val -> C8L.putStrLn $ encode val
+runKMDBridgeMethod :: Parser Method
+runKMDBridgeMethod = pure $ runHathConfigured runKMDBridge

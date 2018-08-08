@@ -43,7 +43,7 @@ packages:
 extra-deps:
 - murmur3-1.0.3
 - pbkdf-1.1.1.1
-- aeson-quick-0.1.2.0
+- aeson-quick-0.1.2.1
 - git: git@github.com:libscott/secp256k1-haskell.git
   commit: c1b25d0
 - git: git@github.com:libscott/hassembly-evm.git

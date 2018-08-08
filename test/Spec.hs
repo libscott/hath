@@ -3,18 +3,23 @@
 import qualified Data.ByteString.Base16 as B16
 
 import           Network.Ethereum.Transaction
-import           Network.Ethereum.Data.Aeson
+import           Network.Hath.Data.Aeson
 import           Network.Ethereum.Crypto
-import           Network.Ethereum.Prelude
+import           Network.Hath.Prelude
 
 import           Test.Tasty
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
+
+import           TestBitcoinContracts
 import Debug.Trace
 
 
 main :: IO ()
-main = defaultMain mainTests
+main = defaultMain $ testGroup 
+  [ mainTests
+  , contractTests
+  ]
 
 
 mainTests :: TestTree
