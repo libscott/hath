@@ -29,6 +29,7 @@ module Network.Ethereum.Data.RLP (
   rlpSplit,
   rlpSerialize,
   rlpDeserialize,
+  rlpNull,
   packInteger,
   unpackInteger
   ) where
@@ -48,13 +49,21 @@ import           Numeric
 -- End users will not need to directly create objects of this type (an 'RLPObject' can be created using 'rlpEncode'),
 -- however the designer of a new type will need to create conversion code by making their type an instance 
 -- of the RLPSerializable class. 
-data RLPObject = RLPScalar Word8 | RLPString B.ByteString | RLPArray [RLPObject] deriving (Show, Eq, Ord)
+data RLPObject =
+  RLPScalar Word8 |
+  RLPString B.ByteString |
+  RLPArray [RLPObject]
+  deriving (Eq, Ord)
+
+instance Show RLPObject where
+  show (RLPScalar w) = show w
+  show (RLPString b) = show b
+  show (RLPArray a) = show a
 
 -- | Converts objects to and from 'RLPObject's.
 class RLPSerializable a where
   rlpDecode::RLPObject->a
   rlpEncode::a->RLPObject
-
 
 instance Pretty RLPObject where
   pretty (RLPArray objects) =
@@ -144,6 +153,10 @@ rlpDeserialize s =
 -- Full serialization of an object can be obtained using @rlpSerialize . rlpEncode@.
 rlpSerialize::RLPObject->B.ByteString
 rlpSerialize o = B.pack $ rlp2Bytes o
+
+
+rlpNull :: RLPObject
+rlpNull = RLPString ""
 
 
 instance RLPSerializable Integer where

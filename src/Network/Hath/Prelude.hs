@@ -20,7 +20,7 @@ import Data.ByteString as ALL (ByteString)
 import qualified Data.ByteString.Base16 as B16
 import Data.ByteString.Lazy as ALL (toStrict)
 import Data.ByteString.Short as ALL (toShort, fromShort)
-import Data.List as ALL (elemIndex, sort)
+import Data.List as ALL (elemIndex, sort, sortOn)
 import Data.Maybe as ALL (catMaybes, fromJust, fromMaybe, mapMaybe)
 import Data.Monoid as ALL
 import Data.Set as ALL (Set)
