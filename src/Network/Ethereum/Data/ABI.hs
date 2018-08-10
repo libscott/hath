@@ -15,7 +15,7 @@ import           Network.Hath.Prelude
 
 
 abiMethod :: String -> ByteString
-abiMethod = BS.take 4 . sha3 . fromString
+abiMethod = BS.take 4 . sha3' . fromString
 
 bytesPad :: ByteString -> Bool -> ByteString
 bytesPad bs rev = do

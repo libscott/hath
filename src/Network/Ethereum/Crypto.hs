@@ -1,14 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Network.Ethereum.Crypto
   ( module Crypto.Secp256k1
   , Address(..)
   , CompactRecSig(..)
   , Ident
+  , Sha3(..)
   , pubKeyAddr
   , genSecKey
   , loadSecret
   , sha3
+  , sha3'
   ) where
 
 
@@ -25,6 +28,7 @@ import           Data.Monoid
 import qualified Data.Text as T
 
 import           Network.Ethereum.Data.Hex
+import           Network.Ethereum.Data.RLP
 import           Network.Hath.Data.Aeson
 import           Network.Hath.Prelude
 
@@ -73,13 +77,29 @@ instance FromJSON CompactRecSig where
               _      -> fail "Sig invalid"
   parseJSON _ = fail "Sig wrong type"
 
+newtype Sha3 = Sha3 { unSha3 :: ByteString }
+  deriving (Eq, Ord, RLPSerializable)
 
-sha3 :: ByteString -> ByteString
-sha3 bs = BS.pack (BA.unpack (hash bs :: Digest Keccak_256))
+instance Show Sha3 where
+  show (Sha3 bs) = asString (toHex bs)
 
+instance Read Sha3 where
+  readsPrec _ s =
+    if length s == 64
+       then [(Sha3 $ fromHex $ fromString s, "")]
+       else []
+
+instance IsString Sha3 where
+  fromString s = read s
+
+sha3' :: ByteString -> ByteString
+sha3' bs = BS.pack (BA.unpack (hash bs :: Digest Keccak_256))
+
+sha3 :: ByteString -> Sha3
+sha3 = Sha3 . sha3'
 
 pubKeyAddr :: PubKey -> Address
-pubKeyAddr = Address . BS.drop 12 . sha3 . BS.drop 1 . exportPubKey False
+pubKeyAddr = Address . BS.drop 12 . sha3' . BS.drop 1 . exportPubKey False
 
 type Ident = (SecKey, PubKey, Address)
 

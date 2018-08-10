@@ -20,12 +20,12 @@ withoutSig tx = tx { _sig = Nothing }
 encodeTx :: Transaction -> ByteString
 encodeTx = rlpSerialize . rlpEncode
 
-txid :: Transaction -> ByteString
+txid :: Transaction -> Sha3
 txid = sha3 . encodeTx . withoutSig
 
 signTx :: Transaction -> SecKey -> Transaction
 signTx tx sk = 
-  let payload = txid tx
+  let payload = unSha3 $ txid tx
       Just recSig = signRecMsg sk <$> msg payload
       sig = exportCompactRecSig recSig
    in tx { _sig = Just sig }
@@ -33,6 +33,6 @@ signTx tx sk =
 recoverFrom :: Transaction -> Maybe PubKey
 recoverFrom tx = do
   rs <- _sig tx >>= importCompactRecSig
-  message <- msg $ txid tx
+  message <- msg $ unSha3 $ txid tx
   recover rs message
 

@@ -33,6 +33,8 @@ import Network.Ethereum.Errors as ALL
 import Network.Hath.Monad.Types as ALL
 import Network.Hath.Logging as ALL
 
+import Text.Pretty.Simple as ALL (pPrint)
+
 import System.Directory
 
 import Debug.Trace as ALL (traceShowId)

@@ -60,13 +60,13 @@ initKMDBridge openingBalanceHash = do
 
     lastState <- bridgeLastState bridgeAddr
     let doInit = do
-        pendingHash <- spendOpeningBalance openingBalanceHash
-        let newState = build "{pending}" lastState pendingHash
-        hasReader $ do
-          tx <- makeTransaction bridgeAddr $
-                abiMethod "updateState(bytes)" <> bytesLong (toStrict $ encode newState)
-          postTransactionSync tx
-        pure ()
+          pendingHash <- spendOpeningBalance openingBalanceHash
+          let newState = build "{pending}" lastState pendingHash
+          hasReader $ do
+            tx <- makeTransaction bridgeAddr $
+                  abiMethod "updateState(bytes)" <> bytesLong (toStrict $ encode newState)
+            postTransactionSync tx
+          pure ()
 
     case lastState .? "{pending}" :: Maybe Value of
          Nothing -> doInit <* logInfo "Bridge initialized"

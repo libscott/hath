@@ -47,6 +47,7 @@ dependencies:
 - mtl
 - ndjson-conduit
 - optparse-applicative
+- pretty-simple
 - QuickCheck
 - secp256k1
 - text
@@ -80,6 +81,6 @@ tests:
     - tasty
     - tasty-hunit
     - tasty-golden
-    - smallcheck
-    - tasty-smallcheck
+    - tasty-quickcheck
+    - quickcheck-instances
 

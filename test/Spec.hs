@@ -2,9 +2,9 @@
 
 import qualified Data.ByteString.Base16 as B16
 
+import           Network.Ethereum.Crypto
 import           Network.Ethereum.Transaction
 import           Network.Hath.Data.Aeson
-import           Network.Ethereum.Crypto
 import           Network.Hath.Prelude
 
 import           Test.Tasty
@@ -12,21 +12,23 @@ import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 
 import           TestBitcoinContracts
+import           TestHashTrie
 import Debug.Trace
 
 
 main :: IO ()
-main = defaultMain $ testGroup 
-  [ mainTests
+main = defaultMain $ testGroup "All tests"
+  [ recSigTests
   , contractTests
+  , hashTrieTests
   ]
 
 
-mainTests :: TestTree
-mainTests = testGroup "All Tests"
+recSigTests :: TestTree
+recSigTests = testGroup "RecSig tests"
 
   [ testCase "CompactRecSig" $ do
-      let Just recSig = signRecMsg sk <$> msg txid_a
+      let Just recSig = signRecMsg sk <$> msg (unSha3 txid_a)
           CompactRecSig r s v = exportCompactRecSig recSig
           d = B16.encode . fromShort
       (d r,d s,v) @?= txsig_a
@@ -59,8 +61,8 @@ sk :: SecKey
 address :: Address
 address = Address $ fst $ B16.decode "77952ce83ca3cad9f7adcfabeda85bd2f1f52008"
 
-txid_a :: ByteString
-txid_a = fst $ B16.decode "d018f1502a71f61a00b77546b99f2a647dda07ecb4cf94bd14cd4dbf4337be3d"
+txid_a :: Sha3
+txid_a = "d018f1502a71f61a00b77546b99f2a647dda07ecb4cf94bd14cd4dbf4337be3d"
 
 txbin_a :: ByteString
 txbin_a = fst $ B16.decode "ce800a82cfc6808204d281f4108080"

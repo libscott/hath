@@ -106,7 +106,7 @@ txidMethod :: Parser Method
 txidMethod = pure $ do
   (txBin,_) <- B16.decode <$> BS8.getContents
   let tx = rlpDecode $ rlpDeserialize txBin :: Transaction
-  BS8.putStrLn $ toHex $ txid tx
+  BS8.putStrLn $ toHex $ unSha3 $ txid tx
 
 
 keyPairMethod :: Parser Method
