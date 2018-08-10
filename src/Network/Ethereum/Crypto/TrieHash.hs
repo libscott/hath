@@ -7,7 +7,7 @@ import qualified Data.ByteString as BS
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data.RLP
 
-import           Network.Hath.Prelude
+import           Hath.Prelude
 import Debug.Trace
 
 

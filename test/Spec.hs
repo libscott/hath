@@ -4,8 +4,8 @@ import qualified Data.ByteString.Base16 as B16
 
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Transaction
-import           Network.Hath.Data.Aeson
-import           Network.Hath.Prelude
+import           Hath.Data.Aeson
+import           Hath.Prelude
 
 import           Test.Tasty
 import           Test.Tasty.Golden

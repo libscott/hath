@@ -11,7 +11,7 @@ import qualified Data.ByteString as BS
 
 import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Crypto
-import           Network.Hath.Prelude
+import           Hath.Prelude
 
 
 abiMethod :: String -> ByteString

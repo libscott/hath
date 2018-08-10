@@ -9,8 +9,8 @@ module TestBitcoinContracts where
 --import           Network.Haskoin.Script.Evaluator
 --import           Network.Haskoin.Test
 --
---import           Network.Hath.Prelude
---import           Network.Hath.Contracts.Bitcoin
+--import           Hath.Prelude
+--import           Hath.Contracts.Bitcoin
 --
 --import           Test.QuickCheck
 --

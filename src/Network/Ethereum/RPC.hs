@@ -11,9 +11,9 @@ import           Data.Conduit.Network
 import           Network.Socket hiding (send, recv)
 import           Network.Socket.ByteString
 
-import           Network.Hath.Data.Aeson
-import           Network.Hath.Monad
-import           Network.Hath.Prelude
+import           Hath.Data.Aeson
+import           Hath.Monad
+import           Hath.Prelude
 
 
 data RPCMaybe a = RPCMaybe (Maybe a)

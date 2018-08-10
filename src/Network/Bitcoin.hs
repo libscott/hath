@@ -9,8 +9,8 @@ import qualified Data.Map as Map
 import qualified Data.ByteString as BS
 import           Data.Attoparsec.ByteString.Char8
 
-import           Network.Hath.Data.Aeson hiding (Parser)
-import           Network.Hath.Prelude
+import           Hath.Data.Aeson hiding (Parser)
+import           Hath.Prelude
 import           Network.HTTP.Simple
 
 

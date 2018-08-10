@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Network.Hath.Monad.Types where
+module Hath.Monad.Types where
 
 import           Control.Monad.Fail
 import           Control.Monad.Except

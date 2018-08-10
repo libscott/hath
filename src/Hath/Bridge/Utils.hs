@@ -4,7 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Network.Hath.Bridge.Utils where
+module Hath.Bridge.Utils where
 
 
 import           Control.Monad.Reader
@@ -14,9 +14,9 @@ import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data
 import           Network.Ethereum.RPC
 import           Network.Ethereum.Transaction
-import           Network.Hath.Data.Aeson
-import           Network.Hath.Monad
-import           Network.Hath.Prelude
+import           Hath.Data.Aeson
+import           Hath.Monad
+import           Hath.Prelude
 
 
 data BridgeConfig = BridgeConfig

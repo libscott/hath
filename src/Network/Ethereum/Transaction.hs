@@ -11,7 +11,7 @@ import Network.Ethereum.Crypto
 import Network.Ethereum.Data.RLP
 import Network.Ethereum.Transaction.Types as ALL
 
-import Network.Hath.Prelude
+import Hath.Prelude
 
 
 withoutSig :: Transaction -> Transaction

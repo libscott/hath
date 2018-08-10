@@ -2,7 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Network.Hath.Bridge.KMD where
+module Hath.Bridge.KMD where
 
 import           Control.Concurrent (threadDelay)
 
@@ -10,10 +10,10 @@ import           Network.Bitcoin
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data
 import           Network.Ethereum.RPC
-import           Network.Hath.Data.Aeson
-import           Network.Hath.Prelude
-import           Network.Hath.Monad
-import           Network.Hath.Bridge.Utils
+import           Hath.Data.Aeson
+import           Hath.Prelude
+import           Hath.Monad
+import           Hath.Bridge.Utils
 import qualified Network.Haskoin.Internals as H
 import           Network.Komodo
 

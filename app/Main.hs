@@ -16,11 +16,11 @@ import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Transaction
 
-import           Network.Hath.Bridge
-import           Network.Hath.Bridge.KMD
-import           Network.Hath.Data.Aeson hiding (Parser)
-import           Network.Hath.Monad
-import           Network.Hath.Prelude
+import           Hath.Bridge
+import           Hath.Bridge.KMD
+import           Hath.Data.Aeson hiding (Parser)
+import           Hath.Monad
+import           Hath.Prelude
 import qualified Network.Haskoin.Internals as H
 
 import           Language.Evm (codegen)

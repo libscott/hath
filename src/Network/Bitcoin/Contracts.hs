@@ -10,7 +10,7 @@ import           Network.Ethereum.Data (packInteger)
 import           Network.Haskoin.Script
 import           Network.Haskoin.Crypto
 
-import           Network.Hath.Prelude
+import           Hath.Prelude
 
 
 bitcoinMultisig :: Word8 -> [PubKey] -> Script

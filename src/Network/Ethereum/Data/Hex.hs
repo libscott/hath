@@ -9,8 +9,8 @@ import           Data.Char (chr, ord)
 import qualified Data.ByteString as BS
 import qualified Data.Text as T
 
-import           Network.Hath.Data.Aeson
-import           Network.Hath.Prelude
+import           Hath.Data.Aeson
+import           Hath.Prelude
 
 
 newtype Hex = Hex { unHex :: ByteString }

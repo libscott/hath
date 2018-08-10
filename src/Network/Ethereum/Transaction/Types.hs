@@ -4,10 +4,10 @@ module Network.Ethereum.Transaction.Types where
 
 import qualified Data.ByteString.Char8 as BS8
 
-import           Network.Hath.Data.Aeson
+import           Hath.Data.Aeson
 import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Crypto
-import           Network.Hath.Prelude
+import           Hath.Prelude
 
 
 data Transaction = Tx

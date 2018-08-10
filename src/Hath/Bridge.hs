@@ -1,14 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Network.Hath.Bridge where
+module Hath.Bridge where
 
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data
 import           Network.Ethereum.RPC
-import           Network.Hath.Data.Aeson
-import           Network.Hath.Bridge.Utils
-import           Network.Hath.Monad
-import           Network.Hath.Prelude
+import           Hath.Data.Aeson
+import           Hath.Bridge.Utils
+import           Hath.Monad
+import           Hath.Prelude
 
 
 bridge :: Hath HathConfig ()

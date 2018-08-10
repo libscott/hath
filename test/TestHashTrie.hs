@@ -9,7 +9,7 @@ import qualified Data.ByteString.Char8 as BS8
 import           Network.Ethereum.Data
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Crypto.TrieHash
-import           Network.Hath.Prelude
+import           Hath.Prelude
 
 import           Test.Tasty
 import           Test.Tasty.HUnit

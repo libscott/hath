@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Network.Hath.Prelude
+module Hath.Prelude
   ( module ALL
   , liftEither
   , traceE
@@ -30,8 +30,8 @@ import Data.Text.Encoding as ALL (encodeUtf8, decodeUtf8)
 import Data.Word as ALL (Word8, Word64)
 
 import Network.Ethereum.Errors as ALL
-import Network.Hath.Monad.Types as ALL
-import Network.Hath.Logging as ALL
+import Hath.Monad.Types as ALL
+import Hath.Logging as ALL
 
 import Text.Pretty.Simple as ALL (pPrint)
 

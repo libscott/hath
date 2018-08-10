@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Network.Hath.Logging 
+module Hath.Logging 
   ( module LOG
   , logDebug
   , logInfo

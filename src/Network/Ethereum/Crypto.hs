@@ -29,8 +29,8 @@ import qualified Data.Text as T
 
 import           Network.Ethereum.Data.Hex
 import           Network.Ethereum.Data.RLP
-import           Network.Hath.Data.Aeson
-import           Network.Hath.Prelude
+import           Hath.Data.Aeson
+import           Hath.Prelude
 
 import           System.Entropy
 

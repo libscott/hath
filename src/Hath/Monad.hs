@@ -1,14 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Network.Hath.Monad where
+module Hath.Monad where
 
 import qualified Data.ByteString.Char8 as BS8
 
 import           Control.Monad.Reader
 
-import           Network.Hath.Data.Aeson
-import           Network.Hath.Prelude
+import           Hath.Data.Aeson
+import           Hath.Prelude
 
 import           System.Directory
 

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Network.Hath.Data.Aeson
+module Hath.Data.Aeson
   ( module DA
   , StrictObject
   , withStrictObject
