@@ -42,7 +42,6 @@ dependencies:
 - memory
 - microlens
 - microlens-platform
-- microlens-aeson
 - monad-logger
 - mtl
 - ndjson-conduit

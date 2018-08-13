@@ -58,7 +58,7 @@ instance FromJSON Address where
                           else fail "Invalid Address"
 
 instance ToJSON Address where
-  toJSON (Address bs) = toJsonHex bs
+  toJSON (Address bs) = toJSON $ Hex bs
 
 
 -- Orphan instance for CompactRecSig

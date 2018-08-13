@@ -15,15 +15,19 @@ import           System.Directory
 
 data HathConfig = HathConfig
   { getConfigPath :: FilePath
-  , gethIpcPath :: FilePath
   } deriving (Show)
 
-runHathConfigured :: Hath HathConfig a -> IO a
-runHathConfigured (Hath act) = do
-  configPath <- getAppUserDataDirectory "hath"
-  gethPath <- (++"/geth.ipc") <$> getAppUserDataDirectory "kmdx"
-  let config = HathConfig configPath gethPath
-  runStderrLoggingT $ runReaderT act config
+
+getHathConfig :: IO HathConfig
+getHathConfig =
+  let configPath = getAppUserDataDirectory "hath"
+   in HathConfig <$> configPath
+
+runHath :: r -> Hath r a -> IO a
+runHath r (Hath act) = runStderrLoggingT $ runReaderT act r
+
+-- TODO: remove
+runHathConfigured act = getHathConfig >>= flip runHath act
 
 loadJsonConfig :: FromJSON a => String -> HathE HathConfig a
 loadJsonConfig name = do

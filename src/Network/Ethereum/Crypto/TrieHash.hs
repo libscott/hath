@@ -8,7 +8,6 @@ import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data.RLP
 
 import           Hath.Prelude
-import Debug.Trace
 
 
 type Nibbles = [Word8]
@@ -48,7 +47,6 @@ decodeTrie (RLPArray items) | length items == 17 =
    in Branch16 (rlpDecode <$> branches) $ rlpDecode val
 decodeTrie (RLPString "") = N
 decodeTrie (RLPString bs) | BS.length bs == 32 = HashNode $ Sha3 bs
-
 
 -- Crypto ---------------------------------------------------------------------
 --

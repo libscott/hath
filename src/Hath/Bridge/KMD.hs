@@ -32,6 +32,9 @@ instance Has BridgeConfig KomodoBridge where
 instance Has HathConfig KomodoBridge where
   has = has . getBridgeConfig
 
+instance Has GethConfig KomodoBridge where
+  has = error "No GethConfig"
+
 runKMDBridgeConfigured :: Has BridgeConfig r => HathE KomodoBridge a -> HathE r a
 runKMDBridgeConfigured act = do
     logInfo $ "Loading KMD RPC config"
@@ -64,7 +67,7 @@ initKMDBridge openingBalanceHash = do
           let newState = build "{pending}" lastState pendingHash
           hasReader $ do
             tx <- makeTransaction bridgeAddr $
-                  abiMethod "updateState(bytes)" <> bytesLong (toStrict $ encode newState)
+                  abi "updateState(bytes)" $ toStrict $ encode newState
             postTransactionSync tx
           pure ()
 
@@ -144,7 +147,7 @@ spendOpeningBalance hash = do
 
 bridgeLastState :: Address -> HathE KomodoBridge Value
 bridgeLastState bridgeAddr = do
-  Hex bs  <- readCall bridgeAddr $ abiMethod "lastState()"
+  Hex bs  <- readCall bridgeAddr $ abi "lastState()" ()
   traceE "Decoding lastState" $ liftEither $ eitherDecodeStrict' bs
 
 

@@ -24,6 +24,10 @@ instance FromJSON a => FromJSON (RPCMaybe a) where
   parseJSON val = RPCMaybe . Just <$> parseJSON val
 
 
+newtype GethConfig = GethConfig { gethIpcPath :: FilePath }
+  deriving (Show)
+
+
 queryJsonRPC :: FromJSON a => Socket -> Text -> [Value] -> HathE r a
 queryJsonRPC sock method params = do
   let req = "{jsonrpc,method,params,id}" .% (String "2.0", method, params, Null)
@@ -39,7 +43,7 @@ queryJsonRPC sock method params = do
     liftEither $ out >>= interpret
 
 
-ethereumRPCSock :: Hath HathConfig Socket
+ethereumRPCSock :: Hath GethConfig Socket
 ethereumRPCSock = do
   ipcPath <- asks $ gethIpcPath
   sock <- liftIO $ socket AF_UNIX Stream 0
@@ -47,7 +51,7 @@ ethereumRPCSock = do
   pure sock
 
 
-queryEthereum :: (Has HathConfig r, FromJSON a) => Text -> [Value] -> HathE r a
+queryEthereum :: (Has GethConfig r, FromJSON a) => Text -> [Value] -> HathE r a
 queryEthereum method params =
   hasReader $ do
     sock <- lift ethereumRPCSock

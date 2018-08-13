@@ -29,6 +29,12 @@ data BridgeConfig = BridgeConfig
 instance Has HathConfig BridgeConfig where
   has = hathConfig
 
+instance Has GethConfig BridgeConfig where
+  has = undefined -- TODO: fix
+
+instance Has GethConfig HathConfig where
+  has = undefined
+
 instance FromJSON BridgeConfig where
   parseJSON = withStrictObject "BridgeConfig" $ \obj -> do
     Hex secretBytes <- obj .:- "secret"
@@ -45,7 +51,7 @@ managerAddress :: Address
 managerAddress = "0x0300000000000000000000000000000000000000"
 
 
-readCall :: (Has HathConfig r, FromJSON a) => Address -> ByteString -> HathE r a
+readCall :: (Has GethConfig r, FromJSON a) => Address -> ByteString -> HathE r a
 readCall addr callData =
   queryEthereum "eth_call" ["{to,data}" .% (addr, Hex callData), "latest"]
 
@@ -79,7 +85,7 @@ postTransactionSync tx = do
 
 getBridge :: Has BridgeConfig r => ByteString -> HathE r Address
 getBridge symbol = hasReader $ do
-  let callData = abiMethod "getBridge(bytes16)" <> bytesN symbol
+  let callData = abi "getBridge(bytes16)" $ BytesN symbol
   RPCMaybe mexisting <- hathReader hathConfig $ readCall managerAddress callData
   maybe (throwError "Bridge does not exist; use bridge init method") pure mexisting
 
@@ -87,7 +93,7 @@ getBridge symbol = hasReader $ do
 getOrMakeBridge :: Has BridgeConfig r => String -> ByteString -> HathE r (Address, Bool)
 getOrMakeBridge createMethod symbol = hasReader $ do
   let createBridge = do
-        let callData = abiMethod createMethod <> bytesN symbol
+        let callData = abi createMethod $ BytesN symbol
         tx <- makeTransaction managerAddress callData
         txStatus <- postTransactionSync tx
         case txStatus .! "{contractAddress}" of

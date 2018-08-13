@@ -18,6 +18,7 @@ import           Network.Ethereum.Transaction
 
 import           Hath.Bridge
 import           Hath.Bridge.KMD
+import           Hath.Notariser.ETHKMD
 import           Hath.Data.Aeson hiding (Parser)
 import           Hath.Monad
 import           Hath.Prelude
@@ -45,6 +46,7 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Ethereum command line utils"
         <> (command "contract"  $ infoH contractMethods   $ progDesc "generate contracts")
         <> (command "runBridge" $ infoH runBridgeMethod   $ progDesc "run bridge")
         <> (command "bridge"    $ infoH bridgeMethods     $ progDesc "brige modes")
+        <> (command "notariser" $ infoH notariserMethods  $ progDesc "notariser modes")
 
     txMethods = subparser $
            (command "encode"    $ infoH encodeTxMethod    $ progDesc "encode a json transaction")
@@ -59,6 +61,9 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Ethereum command line utils"
     bridgeMethods = subparser $
            (command "initKMD" $ infoH initKMDBridgeMethod $ progDesc "init KMD bridge")
         <> (command "runKMD"  $ infoH runKMDBridgeMethod  $ progDesc "run KMD bridge")
+
+    notariserMethods = subparser $
+           (command "ethkmd" $ infoH runEthNotariserMethod $ progDesc "run ETH -> KMD notariser")
 
 
 jsonMethod :: IO Value -> Method
@@ -139,3 +144,6 @@ initKMDBridgeMethod =
 
 runKMDBridgeMethod :: Parser Method
 runKMDBridgeMethod = pure $ runHathConfigured runKMDBridge
+
+runEthNotariserMethod :: Parser Method
+runEthNotariserMethod = pure $ either error id <$> ethNotariser 

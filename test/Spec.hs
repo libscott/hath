@@ -13,6 +13,7 @@ import           Test.Tasty.HUnit
 
 import           TestBitcoinContracts
 import           TestHashTrie
+import           TestABI
 import Debug.Trace
 
 
@@ -21,6 +22,7 @@ main = defaultMain $ testGroup "All tests"
   [ recSigTests
   , contractTests
   , hashTrieTests
+  , abiTests
   ]
 
 
