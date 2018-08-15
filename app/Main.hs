@@ -16,8 +16,6 @@ import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Transaction
 
-import           Hath.Bridge
-import           Hath.Bridge.KMD
 import           Hath.Notariser.ETHKMD
 import           Hath.Data.Aeson hiding (Parser)
 import           Hath.Monad
@@ -44,8 +42,6 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Ethereum command line utils"
            (command "tx"        $ infoH txMethods         $ progDesc "tx methods")
         <> (command "keyPair"   $ infoH keyPairMethod     $ progDesc "generate a priv/pub key pair")
         <> (command "contract"  $ infoH contractMethods   $ progDesc "generate contracts")
-        <> (command "runBridge" $ infoH runBridgeMethod   $ progDesc "run bridge")
-        <> (command "bridge"    $ infoH bridgeMethods     $ progDesc "brige modes")
         <> (command "notariser" $ infoH notariserMethods  $ progDesc "notariser modes")
 
     txMethods = subparser $
@@ -57,10 +53,6 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Ethereum command line utils"
 
     contractMethods = subparser $
            (command "contractProxy" $ infoH contractProxyMethod $ progDesc "get code for proxy contract")
-
-    bridgeMethods = subparser $
-           (command "initKMD" $ infoH initKMDBridgeMethod $ progDesc "init KMD bridge")
-        <> (command "runKMD"  $ infoH runKMDBridgeMethod  $ progDesc "run KMD bridge")
 
     notariserMethods = subparser $
            (command "ethkmd" $ infoH runEthNotariserMethod $ progDesc "run ETH -> KMD notariser")
@@ -133,17 +125,9 @@ contractProxyMethod = act <$> optInit <*> argAddress
         argAddress = argument auto (metavar "target contract address")
         optInit = switch $ long "init" <> short 'i' <> help "Return code for contract init"
 
-runBridgeMethod :: Parser Method
-runBridgeMethod = pure $ runHathConfigured bridge
-
-initKMDBridgeMethod :: Parser Method
-initKMDBridgeMethod =
-  let act = runHathConfigured . initKMDBridge
-      openingBalanceArg = maybeReader $ H.hexToTxHash . fromString
-   in act <$> argument openingBalanceArg (metavar "Opening Balance")
-
-runKMDBridgeMethod :: Parser Method
-runKMDBridgeMethod = pure $ runHathConfigured runKMDBridge
 
 runEthNotariserMethod :: Parser Method
-runEthNotariserMethod = pure $ either error id <$> ethNotariser 
+runEthNotariserMethod = act <$> optional optAddress
+  where
+    optAddress = option auto (long "mandate" <> metavar "[mandate address]")
+    act addr = ethNotariser addr >>= either error pure

@@ -3,13 +3,14 @@
 
 module Hath.Notariser.ETHKMD where
 
+import Control.Concurrent (threadDelay)
 import Network.Ethereum.Crypto
 import Network.Ethereum.Data
 import Network.Ethereum.RPC
 import Network.Bitcoin
 
-import Hath.Bridge.Utils
 import Hath.Data.Aeson
+import Hath.Mandate
 import Hath.Monad
 import Hath.Prelude
 
@@ -19,39 +20,59 @@ import Hath.Prelude
 
 data EthNotariser = EthNotariser
   { getKomodoConfig :: BitcoinConfig
-  , getEthSockPath :: FilePath
-  , getMandateAddress :: Address
+  , gethConfig :: GethConfig
+  , getMandate :: Mandate
   } deriving (Show)
 
 instance Has GethConfig EthNotariser where
-  has n = GethConfig $ getEthSockPath n
+  has = gethConfig
 
-runEthNotariser :: HathE EthNotariser a -> IO (Either String a)
-runEthNotariser act =
-  runHath () $ runExceptT $ do
+instance Has Mandate EthNotariser where
+  has = getMandate
+
+runEthNotariser :: Maybe Address -> HathE EthNotariser a -> IO (Either String a)
+runEthNotariser maddress act = do
+  let gethConfig = GethConfig "http://localhost:8545"
+  runHath gethConfig $ runExceptT $ do
+
+    -- load config
+    conf <- loadJsonConfig "hath"
+
+    -- load mandate
+    (Hex sk, (mandateAddr0, chainId)) <- conf .@ "{secret,mandates:{ETHKMD:{addr,chainId}}}"
+    ident <- liftEither $ loadSecret sk
+    let mandateAddr = maybe mandateAddr0 id maddress
+
+    mandate <- loadMandate ident mandateAddr chainId
+
     bitcoinConf <- loadBitcoinConfig "~/.komodo/komodo.conf"
-    let mandate = "0x8288295979fdbd828606bdd72425bb9d9fea7e49"
-    let config = EthNotariser bitcoinConf "/home/scott/code/wing/kmdcontracts/testChainData/geth.ipc"
-                              mandate
+    let config = EthNotariser bitcoinConf gethConfig mandate
     hathReader (const config) act
 
-ethNotariser :: IO (Either String ())
-ethNotariser = runEthNotariser $ do
-  let callData = abi "getMembers()" ()
+ethNotariser :: Maybe Address -> IO (Either String ())
+ethNotariser maddress = runEthNotariser maddress $
+  forever $ do
+    lastState <- mandateGetState "ETHKMD"
 
-  mandate <- asks getMandateAddress
-  ABI (U256 requiredSigs, addresses) <- readCall mandate callData
-  logInfo $ "Parties: " ++ show requiredSigs ++ " of " ++ show (addresses :: [Address])
+    if lastState == Null
+       then do
+         logInfo $ "Starting notarisation for the first time"
+         agreeHeight lastState
+       else error "what now"
+
+    liftIO $ threadDelay 1000000
+
+
+agreeHeight :: Value -> HathE EthNotariser ()
+agreeHeight lastState = do
+  -- At this point we should create a tx to etheruem to register agreement
+  -- to notarise a block. So we do a state change to update the data.
+
+  -- get new state
+  let newState = build "{op}" lastState ("notarise"::Text)
+  logInfo $ "Last state: " ++ asString lastState
+  logInfo $ "Next state: " ++ asString newState
+
+  mandateSetState "ETHKMD" newState
   
-  ABI lastState <- readCall mandate $ abi "getState(bytes32)" $ BytesN "ETHKMD"
-  if lastState == Null
-     then ethNotariserFirstTime
-     else ethNotariserResume lastState
 
-ethNotariserFirstTime :: HathE EthNotariser ()
-ethNotariserFirstTime = do
-  U256 currentHeight <- queryEthereum "eth_blockNumber" []
-  logInfo $ "Starting notarisation for the frist time from ETH block: " ++ show currentHeight
-
-ethNotariserResume :: Value -> HathE EthNotariser ()
-ethNotariserResume = undefined

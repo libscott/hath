@@ -101,13 +101,12 @@ sha3 = Sha3 . sha3'
 pubKeyAddr :: PubKey -> Address
 pubKeyAddr = Address . BS.drop 12 . sha3' . BS.drop 1 . exportPubKey False
 
-type Ident = (SecKey, PubKey, Address)
+type Ident = (SecKey, Address)
 
-loadSecret :: MonadFail m => ByteString -> m Ident
+loadSecret :: ByteString -> Either String Ident
 loadSecret secretBS = do
-  sk <- maybe (fail "Invalid SK bytes?") pure $ secKey secretBS
-  let pk = derivePubKey sk
-  pure (sk, pk, pubKeyAddr pk)
+  sk <- maybe (Left "Invalid SK bytes?") Right $ secKey secretBS
+  pure (sk, pubKeyAddr $ derivePubKey sk)
 
 genSecKey :: IO SecKey
 genSecKey = do

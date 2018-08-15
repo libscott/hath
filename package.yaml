@@ -48,6 +48,7 @@ dependencies:
 - optparse-applicative
 - pretty-simple
 - QuickCheck
+- resourcet
 - secp256k1
 - text
 - transformers

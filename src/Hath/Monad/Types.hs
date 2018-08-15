@@ -40,9 +40,6 @@ unHath (Hath a) = a
 --
 type HathE r = ExceptT String (Hath r)
 
-instance MonadFail (ExceptT String (Hath r)) where
-  fail = throwError
-
 hathReader :: (r -> r') -> HathE r' a -> HathE r a
 hathReader f = ExceptT . Hath . withReaderT f . unHath . runExceptT
 

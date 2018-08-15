@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds, OverloadedStrings #-}
 
 module TestABI where
 
@@ -14,8 +14,8 @@ import           Test.QuickCheck.Instances
 import           Test.Tasty.QuickCheck hiding (Fixed)
 
 
-abiTests, solidityExamples, parity3 :: TestTree
-abiTests = testGroup "abi" [ solidityExamples, parity3, misc ]
+abiTests, solidityExamples, randoms :: TestTree
+abiTests = testGroup "abi" [ solidityExamples, randoms, misc ]
 
 
 -- https://solidity.readthedocs.io/en/develop/abi-spec.html
@@ -29,7 +29,7 @@ solidityExamples = testGroup "solidity examples"
 
   , testCase "example2" $
 
-      iso (BytesN "abc", BytesN "def")
+      iso ("abc"::Bytes 3, "def"::Bytes 3)
           ("6162630000000000000000000000000000000000000000000000000000000000" <>
            "6465660000000000000000000000000000000000000000000000000000000000"
           )
@@ -50,8 +50,9 @@ solidityExamples = testGroup "solidity examples"
   ]
 
 
--- https://github.com/paritytech/js-abi/issues/3
-parity3 = testCase "parity3" $
+randoms = testGroup "randomers"
+  [ testCase "parity3" $
+    -- https://github.com/paritytech/js-abi/issues/3
 
       iso (([[]], [[]]) :: ([[U256]],[[U256]]))
           ("0000000000000000000000000000000000000000000000000000000000000040" <>
@@ -64,6 +65,14 @@ parity3 = testCase "parity3" $
            "0000000000000000000000000000000000000000000000000000000000000000"
           )
 
+  , testCase "empty" $
+    
+      iso (""::ByteString)
+          ("0000000000000000000000000000000000000000000000000000000000000020" <>
+           "0000000000000000000000000000000000000000000000000000000000000000"
+          )
+  ]
+
 
 misc = testGroup "misc"
   [ testCase "misc1" $ abiPass ()
@@ -71,17 +80,17 @@ misc = testGroup "misc"
   , testCase "misc3" $ abiPass (U256 1, U256 2)
   , testCase "misc4" $ abiPass [("ABC"::ByteString,True)]
   , testCase "misc5" $ abiPass [("ABC"::ByteString,True),("DEF",False)]
-  , testCase "misc6" $ abiPass ([["ABC"::ByteString,"DEF"],["GHI"]], [(BytesN "a", "def"::ByteString)])
+  , testCase "misc6" $ abiPass ([["ABC"::ByteString,"DEF"],["GHI"]], [("a"::Bytes 1, "def"::ByteString)])
   , testCase "misc7" $ abiPass ("abc"::ByteString,("def"::ByteString,True))
   , testCase "misc8" $ abiPass ([([(U256 1,"abc"::ByteString)],True)],0::Int)
-  , testCase "misc9" $ abiPass (BytesN "")
-  , testCase "fail1" $ abiFail (BytesN "1") (undefined::Int)
+  , testCase "misc9" $ abiPass (""::Bytes 0)
+  , testCase "fail1" $ abiFail ("1"::Bytes 32) (undefined::Int)
   , testCase "fail2" $ isLeft (decodeABI "" :: Either String Int) @? "string is not long enough"
   ]
 
 
 iso :: (PutABI a, GetABI a, Eq a, Show a) => a -> ByteString -> IO ()
-iso from to = do 
+iso from to = do
   bsWords (toHex $ encodeABI from) @?= bsWords to
   decodeABI (fromHex to) @?= Right from
 

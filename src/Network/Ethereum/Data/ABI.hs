@@ -1,19 +1,27 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE KindSignatures #-}
 
 module Network.Ethereum.Data.ABI
   ( ABI(..)
   , PutABI(..)
   , GetABI(..)
-  , BytesN(..)
+  , Bytes
+  , bytes
   , abi
   , encodeABI
   , decodeABI
+  , takeN
   ) where
 
 import           Control.Monad.State
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+import           Data.Proxy
+
+import           GHC.TypeLits
 
 import           Network.Ethereum.Data.Hex
 import           Network.Ethereum.Data.RLP
@@ -22,10 +30,17 @@ import           Hath.Data.Aeson
 import           Hath.Prelude
 
 
+
 -- Encoding ABI ---------------------------------------------------------------
 --
 
-type ABIPutter = State (Int, BL.ByteString, BL.ByteString) ()
+type PutState =
+  ( Int           -- ^ Size of fixed section
+  , BL.ByteString -- ^ Fixed section
+  , BL.ByteString -- ^ Dynamic section
+  )
+
+type ABIPutter = State PutState ()
 
 class PutABI a where
   fixedLen :: a -> Int
@@ -43,7 +58,7 @@ lazyABI :: PutABI a => a -> BL.ByteString
 lazyABI a = runPutABI (fixedLen a) $ putABI a
 
 runPutABI :: Int -> ABIPutter -> BL.ByteString
-runPutABI i act = let (_,l,r) = execState act (i,"","") in l <> r
+runPutABI i act = let (_, l, r) = execState act (i, "", "") in l <> r
 
 putData :: BL.ByteString -> ABIPutter
 putData bs = modify $ \(a,b,c) -> (a,b<>bs,c)
@@ -62,7 +77,12 @@ instance PutABI U256 where
   putABI (U256 i) = putData $ bytesPad (packInteger i) True
 
 instance PutABI ByteString where
-  putABI bs = putDynamic (BS.length bs) 0 $ putData $ bytesPad bs False
+  putABI bs =
+    let bs' = if bs == "" then "" else bytesPad bs False
+     in putDynamic (BS.length bs) 0 $ putData bs'
+
+instance PutABI Address where
+  putABI (Address bs) = putData $ bytesPad bs True
 
 instance PutABI () where
   fixedLen () = 0
@@ -76,51 +96,56 @@ instance (PutABI a, PutABI b, PutABI c) => PutABI (a,b,c) where
   fixedLen (a,b,c) = fixedLen a + fixedLen (b,c)
   putABI (a,b,c) = putABI a >> putABI (b,c)
 
+instance (PutABI a, PutABI b, PutABI c, PutABI d) => PutABI (a,b,c,d) where
+  fixedLen (a,b,c,d) = fixedLen a + fixedLen (b,c,d)
+  putABI (a,b,c,d) = putABI a >> putABI (b,c,d)
+
 instance PutABI a => PutABI [a] where
   putABI xs = do
     let innerLen = sum $ fixedLen <$> xs
     putDynamic (length xs) innerLen $ mapM_ putABI xs
 
-instance PutABI BytesN where
-  putABI (BytesN bs) =
-     if BS.length bs > 32
-        then error "BytesN: data too long"
-        else putData $ bytesPad bs False
+instance forall n. KnownNat n => PutABI (Bytes n) where
+  putABI (Bytes bs) =
+    if BS.length bs > bytesGetN (Proxy :: Proxy n)
+       then error "Bytes: data too long"
+       else putData $ bytesPad bs False
 
 instance PutABI Bool where
   putABI = putABI . fromEnum
+
+instance PutABI Value where
+  putABI = putABI . BL.toStrict . encode
+
 
 
 -- Parsing ABI ----------------------------------------------------------------
 --
 
-newtype ABI a = ABI { unABI :: a }
-  deriving (Show)
+type GetState =
+  ( Int        -- ^ Current position
+  , ByteString -- ^ Data being read
+  )
 
-type ABIGetter a = ExceptT String (State (Int,ByteString)) a
+type ABIGetter a = ExceptT String (State GetState) a
 
 class GetABI a where
   getABI :: ABIGetter a
 
 decodeABI :: GetABI a => ByteString -> Either String a
-decodeABI bs = evalState (runExceptT getABI) (0,bs)
+decodeABI bs = evalState (runExceptT getABI) (0, bs)
 
 takeN :: Int -> ABIGetter ByteString
 takeN n = do
   (off,bs) <- get
-  when (n > BS.length bs-off) $ throwError "Not enough input"
-  put (off+n,bs)
+  when (n > BS.length bs - off) $ throwError "Not enough input"
+  put (off + n, bs)
   pure $ BS.take n $ BS.drop off bs
 
 getDynamic :: GetABI a => ABIGetter a -> ABIGetter a
 getDynamic act = do
   st <- (,) <$> getABI <*> gets snd
   liftEither $ evalState (runExceptT act) st
-
-instance GetABI a => FromJSON (ABI a) where
-  parseJSON val = do
-    Hex bs <- parseJSON val
-    either fail pure $ ABI <$> decodeABI bs
 
 instance GetABI Bool where
   getABI = do
@@ -144,10 +169,14 @@ instance GetABI ByteString where
   getABI =
     getDynamic $ do
       n <- getABI
-      BS.take n <$> takeN (roundLen n + n)
+      let padding = if n == 0 then 0 else roundLen n
+      BS.take n <$> takeN (padding + n)
 
-instance GetABI BytesN where
-  getABI = BytesN . BS.takeWhile (/=0) <$> takeN 32
+instance forall n. KnownNat n => GetABI (Bytes n) where
+  getABI = do
+    bs <- takeN 32
+    let n = bytesGetN (Proxy :: Proxy n)
+    pure $ bytes $ BS.take n bs
 
 instance GetABI Address where
   getABI = Address . BS.drop 12 <$> takeN 32
@@ -170,20 +199,47 @@ instance (GetABI a, GetABI b, GetABI c) => GetABI (a, b, c) where
 instance GetABI Value where
   getABI = do
     bs <- getABI
-    let d bs = case decodeStrict' bs of
-                    Just r -> pure r
-                    Nothing -> throwError "json decode error"
     if BS.length bs == 0
        then pure Null
-       else d bs
+       else case decodeStrict' bs of
+                    Just r -> pure r
+                    Nothing -> throwError "json decode error"
 
+-- Bytes type -----------------------------------------------------------------
+--
+newtype Bytes (n :: Nat) = Bytes { unBytes :: ByteString }
+  deriving (Eq, Ord)
+
+instance Show (Bytes n) where
+  show = show . asString . unBytes
+
+instance forall n. KnownNat n => IsString (Bytes n) where
+  fromString = bytes . fromString
+
+bytes :: forall n. KnownNat n => ByteString -> Bytes n
+bytes =
+  let n = bytesGetN (Proxy :: Proxy n)
+   in n `seq` Bytes
+
+bytesGetN :: forall n. KnownNat n => Proxy n -> Int
+bytesGetN p =
+  let n = natVal p
+   in if n > 32
+         then error $ "n too big: " ++ show n
+         else fromIntegral n
+
+-- Aeson instance (for abi inside JSON) ---------------------------------------
+--
+newtype ABI a = ABI { unABI :: a }
+  deriving (Show)
+
+instance GetABI a => FromJSON (ABI a) where
+  parseJSON val = do
+    Hex bs <- parseJSON val
+    either fail pure $ ABI <$> decodeABI bs
 
 -- Utilities ------------------------------------------------------------------
 --
-
-newtype BytesN = BytesN { unBytesN :: ByteString }
-  deriving (Show, Eq)
-
 abiMethod :: String -> BL.ByteString
 abiMethod = BL.fromStrict . BS.take 4 . sha3' . fromString
 
