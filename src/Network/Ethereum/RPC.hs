@@ -10,6 +10,8 @@ module Network.Ethereum.RPC
 
 import           Control.Concurrent (threadDelay)
 
+import           Data.Function (fix)
+
 import           Network.Ethereum.Data
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Transaction
@@ -24,16 +26,16 @@ import           Hath.Prelude
 newtype GethConfig = GethConfig { gethEndpoint :: String }
   deriving (Show)
 
-queryEthereum :: (Has GethConfig r, FromJSON a) => Text -> [Value] -> HathE r a
+queryEthereum :: (Has GethConfig r, FromJSON a) => Text -> [Value] -> Hath r a
 queryEthereum method params = do
   endpoint <- asks $ gethEndpoint . has
   queryJsonRpc endpoint method params
 
-readCall :: (Has GethConfig r, FromJSON a) => Address -> ByteString -> HathE r a
+readCall :: (Has GethConfig r, FromJSON a) => Address -> ByteString -> Hath r a
 readCall addr callData =
   queryEthereum "eth_call" ["{to,data}" .% (addr, Hex callData), "latest"]
 
-postTransactionSync :: Has GethConfig r => Transaction -> HathE r Value                      
+postTransactionSync :: Has GethConfig r => Transaction -> Hath r Value                      
 postTransactionSync tx = do                                                         
   logInfo $ "Testing transaction"                                                   
   callResult <- readCall (fromJust $ _to tx) (_data tx)                             
@@ -48,7 +50,7 @@ postTransactionSync tx = do
            then wait                                                                
            else if txStatus .? "{status}" == Just (U256 1)                      
                    then pure txStatus                                               
-                   else throwError $ "Unknown transaction status: " ++ show txStatus
+                   else error $ "Unknown transaction status: " ++ show txStatus
 
 data RPCMaybe a = RPCMaybe (Maybe a)
   deriving (Show)

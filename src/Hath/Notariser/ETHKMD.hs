@@ -4,11 +4,14 @@
 module Hath.Notariser.ETHKMD where
 
 import Control.Concurrent (threadDelay)
+import Control.Monad (forever)
+
 import Network.Ethereum.Crypto
 import Network.Ethereum.Data
 import Network.Ethereum.RPC
 import Network.Bitcoin
 
+import Hath.Config
 import Hath.Data.Aeson
 import Hath.Mandate
 import Hath.Monad
@@ -30,17 +33,17 @@ instance Has GethConfig EthNotariser where
 instance Has Mandate EthNotariser where
   has = getMandate
 
-runEthNotariser :: Maybe Address -> HathE EthNotariser a -> IO (Either String a)
+runEthNotariser :: Maybe Address -> Hath EthNotariser a -> IO a
 runEthNotariser maddress act = do
   let gethConfig = GethConfig "http://localhost:8545"
-  runHath gethConfig $ runExceptT $ do
+  runHath gethConfig $ do
 
     -- load config
     conf <- loadJsonConfig "hath"
 
     -- load mandate
-    (Hex sk, (mandateAddr0, chainId)) <- conf .@ "{secret,mandates:{ETHKMD:{addr,chainId}}}"
-    ident <- liftEither $ loadSecret sk
+    let (Hex sk, (mandateAddr0, chainId)) = conf .! "{secret,mandates:{ETHKMD:{addr,chainId}}}"
+    ident <- either error pure $ loadSecret sk
     let mandateAddr = maybe mandateAddr0 id maddress
 
     mandate <- loadMandate ident mandateAddr chainId
@@ -49,7 +52,7 @@ runEthNotariser maddress act = do
     let config = EthNotariser bitcoinConf gethConfig mandate
     hathReader (const config) act
 
-ethNotariser :: Maybe Address -> IO (Either String ())
+ethNotariser :: Maybe Address -> IO a
 ethNotariser maddress = runEthNotariser maddress $
   forever $ do
     lastState <- mandateGetState "ETHKMD"
@@ -63,7 +66,7 @@ ethNotariser maddress = runEthNotariser maddress $
     liftIO $ threadDelay 1000000
 
 
-agreeHeight :: Value -> HathE EthNotariser ()
+agreeHeight :: Value -> Hath EthNotariser ()
 agreeHeight lastState = do
   -- At this point we should create a tx to etheruem to register agreement
   -- to notarise a block. So we do a state change to update the data.

@@ -16,24 +16,24 @@ import           Hath.Monad
 import           Hath.Prelude
 
 
-runJsonRpc :: FromJSON a => Text -> [Value] -> (Value -> HathE r Value) -> HathE r a
+runJsonRpc :: FromJSON a => Text -> [Value] -> (Value -> Hath r Value) -> Hath r a
 runJsonRpc method params act = do
   let body = "{jsonrpc,method,params,id}" .% (String "2.0", method, params, Null)
       interpret v = case (v .? "{error:{message}}", v .? "{result}") of
                       (Nothing, Just r) -> pure r
-                      (Just e, _)       -> throwError e
-                      _                 -> throwError $ "Unexpected response" ++ show v
+                      (Just e, _)       -> error e
+                      _                 -> error $ "Unexpected response" ++ show v
   act body >>= interpret
 
-queryHttp :: String -> Value -> HathE r Value
+queryHttp :: String -> Value -> Hath r Value
 queryHttp endpoint body = do
   let req = setRequestBodyJSON body $ fromString $ "POST " ++ endpoint
   response <- httpJSONEither req
   case getResponseBody response of
-       Left e -> throwError $ show e
+       Left e -> error $ show e
        Right out -> pure out
 
-queryIpc :: FilePath -> Value -> HathE r Value
+queryIpc :: FilePath -> Value -> Hath r Value
 queryIpc endpoint body = do
   out <- liftIO $ do
     sock <- socket AF_UNIX Stream 0
@@ -43,9 +43,9 @@ queryIpc endpoint body = do
           yield body .| serializer .| sinkSocket sock
           sourceSocket sock .| eitherParser .| mResponse
     runConduit conduit <* close sock
-  liftEither out
+  either error pure out
 
-queryJsonRpc :: FromJSON a => String -> Text -> [Value] -> HathE r a
+queryJsonRpc :: FromJSON a => String -> Text -> [Value] -> Hath r a
 queryJsonRpc endpoint method params =
   traceE ("Json RPC: " ++ show (endpoint, method, asString $ toJSON params)) $ do
     let transport = if take 4 endpoint == "http" then queryHttp else queryIpc

@@ -4,15 +4,12 @@ module Hath.Data.Aeson
   ( module DA
   , StrictObject
   , withStrictObject
-  , (.@)
   , (.:-)
   , (.:-?)
   , fromJsonHex
   , toJsonHex
   ) where
 
-
-import           Control.Monad.Except
 
 import           Data.Aeson as DA hiding (Parser, decode)
 import           Data.Aeson.Types as DA
@@ -39,9 +36,6 @@ fromJsonHex v = do
 
 toJsonHex :: ByteString -> Value
 toJsonHex = String . decodeUtf8 . B16.encode
-
-(.@) :: (FromJSON a, Monad m) => Value -> Structure -> ExceptT String m a
-(.@) val str = ExceptT $ pure $ parseEither (extract str) val
 
 data StrictObject = StrictObject Object (IORef (Set.Set Text))
 

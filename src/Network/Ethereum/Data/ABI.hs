@@ -15,6 +15,7 @@ module Network.Ethereum.Data.ABI
   , takeN
   ) where
 
+import           Control.Monad.Except
 import           Control.Monad.State
 
 import qualified Data.ByteString as BS
@@ -145,7 +146,7 @@ takeN n = do
 getDynamic :: GetABI a => ABIGetter a -> ABIGetter a
 getDynamic act = do
   st <- (,) <$> getABI <*> gets snd
-  liftEither $ evalState (runExceptT act) st
+  either throwError pure $ evalState (runExceptT act) st
 
 instance GetABI Bool where
   getABI = do

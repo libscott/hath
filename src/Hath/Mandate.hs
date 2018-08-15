@@ -25,14 +25,14 @@ data Mandate = Mandate
   , getChainId :: Integer
   } deriving (Show)
 
-loadMandate :: Has GethConfig r => Ident -> Address -> Integer -> HathE r Mandate
+loadMandate :: Has GethConfig r => Ident -> Address -> Integer -> Hath r Mandate
 loadMandate me mandateAddr chainId =
   traceE "loadMandate" $ do
     ABI (r,m) <- readCall mandateAddr $ abi "getMembers()" ()
     logInfo $ "Loaded mandate at addr: " ++ show mandateAddr
     pure $ Mandate mandateAddr r m me chainId
 
-mandateGetState :: (Has Mandate r, Has GethConfig r, GetABI a) => Bytes 32 -> HathE r a
+mandateGetState :: (Has Mandate r, Has GethConfig r, GetABI a) => Bytes 32 -> Hath r a
 mandateGetState key = do
   address <- asks $ getAddress . has
   traceE "mandateGetState" $ 
@@ -41,13 +41,13 @@ mandateGetState key = do
 type Nonce = Int
 type Height = Int
 
-mandateGetNonce :: (Has Mandate r, Has GethConfig r) => Bytes 32 -> HathE r (Nonce, Height)
+mandateGetNonce :: (Has Mandate r, Has GethConfig r) => Bytes 32 -> Hath r (Nonce, Height)
 mandateGetNonce key = do
   address <- asks $ getAddress . has
   traceE "mandateGetNonce" $
     unABI <$> readCall address (abi "getNonce(bytes32)" key)
 
-mandateSetState :: (Has Mandate r, Has GethConfig r, PutABI a) => Bytes 32 -> a -> HathE r ()
+mandateSetState :: (Has Mandate r, Has GethConfig r, PutABI a) => Bytes 32 -> a -> Hath r ()
 mandateSetState key val = do
   address <- asks $ getAddress . has
   let forwardCall = abi "setState(bytes32,string)" (key, val)
@@ -72,7 +72,7 @@ exportMultisigABI sigs =
       , BS.pack $ getCompactRecSigV <$> sigs
       )
 
-campaign :: (Has Mandate r, Has GethConfig r, PutABI a) => a -> HathE r (Maybe [CompactRecSig])
+campaign :: (Has Mandate r, Has GethConfig r, PutABI a) => a -> Hath r (Maybe [CompactRecSig])
 campaign a = do
   logInfo "Collecting sigs..."
   -- for now there's only one of me
@@ -83,7 +83,7 @@ campaign a = do
   logInfo $ "Message hash: " ++ show message
   pure $ Just [crs]
 
-makeTransaction :: (Has GethConfig r, Has Mandate r) => Address -> ByteString -> HathE r Transaction
+makeTransaction :: (Has GethConfig r, Has Mandate r) => Address -> ByteString -> Hath r Transaction
 makeTransaction dest callData = do
   (sk,myAddress) <- asks $ getMe . has
   chainID <- asks $ getChainId . has

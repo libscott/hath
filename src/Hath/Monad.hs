@@ -1,31 +1,52 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Hath.Monad where
 
-import qualified Data.ByteString.Char8 as BS8
-
-import           Data.Conduit
-import           Data.Conduit.Binary
-
+import           Control.Monad.Fail
+import           Control.Monad.Except
+import           Control.Monad.IO.Class
+import           Control.Monad.Logger
 import           Control.Monad.Reader
-import           Control.Monad.Trans.Resource
+import qualified Control.Monad.Trans.Class as Trans
 
-import           Hath.Data.Aeson
-import           Hath.Prelude
 
-import           System.Directory
+newtype Hath r a = Hath (ReaderT r (LoggingT IO) a)
+  deriving (MonadReader r)
 
+instance Functor (Hath r) where
+  fmap f (Hath a) = Hath $ fmap f a
+
+instance Applicative (Hath r) where
+  pure a = Hath $ pure a
+  (Hath f) <*> (Hath a) = Hath $ f <*> a
+
+instance Monad (Hath r) where
+  (Hath a) >>= f = Hath $ a >>= unHath . f
+
+instance MonadIO (Hath r) where
+  liftIO a = Hath $ liftIO a
+
+instance MonadLogger (Hath r) where
+  monadLoggerLog a b c d = Hath $ monadLoggerLog a b c d
 
 runHath :: r -> Hath r a -> IO a
 runHath r (Hath act) = runStderrLoggingT $ runReaderT act r
 
-loadJsonConfig :: FromJSON a => String -> HathE r a
-loadJsonConfig name = do
-  jsonPath <- liftIO $ do
-    configPath <- getAppUserDataDirectory "hath"
-    createDirectoryIfMissing False configPath
-    pure $ configPath ++ "/" ++ name ++ ".json"
-  traceE ("Loading config: " ++ jsonPath) $ do
-    Just bs <- liftIO $ runResourceT $ runConduit $ sourceFile jsonPath .| await
-    liftEither $ eitherDecodeStrict bs
+unHath :: Hath r a -> ReaderT r (LoggingT IO) a
+unHath (Hath a) = a
+
+hathReader :: (r -> r') -> Hath r' a -> Hath r a
+hathReader f = Hath . withReaderT f . unHath
+
+-- The Has type
+class Has r a where
+  has :: a -> r
+
+instance Has r r where
+  has = id
+
+hasReader :: Has r' r => Hath r' a -> Hath r a
+hasReader = hathReader has

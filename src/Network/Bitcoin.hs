@@ -24,15 +24,18 @@ data BitcoinConfig =
 instance Has BitcoinConfig BitcoinConfig where
   has = id
 
-loadBitcoinConfig :: FilePath -> HathE r BitcoinConfig
+loadBitcoinConfig :: FilePath -> Hath r BitcoinConfig
 loadBitcoinConfig path = do
+  logInfo $ "Loading bitcoin config: " ++ path
   configData <- liftIO $ expandPath path >>= BS.readFile
-  let p = \p1 p2 -> liftEither $ parseOnly (parseItem p1 p2) configData
-  user <- p "rpcuser" $ takeTill (inClass " \n")
-  password <- p "rpcpassword" $ takeTill (inClass " \n")
-  port <- p "rpcport" decimal
-  let config = BitcoinConfig user password port
-  pure config
+  let p = \p1 p2 -> parseOnly (parseItem p1 p2) configData
+  let econfig = do
+        user <- p "rpcuser" $ takeTill (inClass " \n")
+        password <- p "rpcpassword" $ takeTill (inClass " \n")
+        port <- p "rpcport" decimal
+        pure $ BitcoinConfig user password port
+  either error pure econfig
+
  
 parseItem :: Parser ByteString -> Parser a -> Parser a
 parseItem matchName parseVal = do
@@ -40,7 +43,7 @@ parseItem matchName parseVal = do
       skipLine = takeTill (=='\n') >> endOfLine
   user <|> (skipLine >> parseItem matchName parseVal)
 
-queryBitcoin :: (Has BitcoinConfig r, FromJSON a) => Text -> [Value] -> HathE r a
+queryBitcoin :: (Has BitcoinConfig r, FromJSON a) => Text -> [Value] -> Hath r a
 queryBitcoin method params = hasReader $ do
   (BitcoinConfig user pass port) <- ask
   let body = "{jsonrpc,method,params,id}" .% (String "2.0", method, params, Null)
@@ -49,9 +52,7 @@ queryBitcoin method params = hasReader $ do
             setRequestPort port $ "POST http://localhost/"
       interpret v = case v .? "{result}" of
                       Just r  -> pure r
-                      Nothing -> throwError $ "Unexpected response: " ++ asString v
+                      Nothing -> error $ "Unexpected response: " ++ asString v
   response <- httpJSONEither req
   traceE ("Bitcoin RPC: " ++ asString body) $
-    case getResponseBody response of
-         Left e -> throwError $ show e
-         Right out -> interpret out
+    either (error . show) interpret $ getResponseBody response
