@@ -41,6 +41,7 @@ data EthNotariser = EthNotariser
   { getKomodoConfig :: BitcoinConfig
   , gethConfig :: GethConfig
   , getMandate :: Mandate
+  , getCCId :: Word16
   } deriving (Show)
 
 instance Has GethConfig EthNotariser where
@@ -62,14 +63,15 @@ runEthNotariser maddress act = do
     conf <- loadJsonConfig "hath"
 
     -- load mandate
-    let (Hex sk, (mandateAddr0, chainId)) = conf .! "{secret,mandates:{ETHKMD:{addr,chainId}}}"
+    let (Hex sk, (mandateAddr0, chainId)) = conf .! "{secret,mandates:{ETHKMD:{addr,ethChainId}}}"
     ident <- either error pure $ loadSecret sk
     let mandateAddr = maybe mandateAddr0 id maddress
 
     mandate <- loadMandate ident mandateAddr chainId
 
     bitcoinConf <- loadBitcoinConfig "~/.komodo/komodo.conf"
-    let config = EthNotariser bitcoinConf gethConfig mandate
+    let ccId = conf .! "{mandates:{ETHKMD:{ccId}}}"
+    let config = EthNotariser bitcoinConf gethConfig mandate ccId
     hathReader (const config) act
 
 ethNotariser :: Maybe Address -> IO a
@@ -96,23 +98,6 @@ ethNotariser maddress = runEthNotariser maddress $
         notariseToKmd (a+1, b)
     liftIO $ threadDelay 1000000
 
-
---READWRITE(blockHash);
---READWRITE(height);
---if (IsBack)
---    READWRITE(txHash);
---SerSymbol(s, ser_action);
---if (s.size() == 0) return;
---READWRITE(MoM);
---READWRITE(MoMDepth);
---READWRITE(ccId);
---if (s.size() == 0) return;
---if (IsBack) {
---    READWRITE(MoMoM);
---    READWRITE(MoMoMDepth);
---}
-
-
 notariseToKmd :: (U256, U256) -> Hath EthNotariser ()
 notariseToKmd (from, to) = do
   (_, myAddr) <- getBitcoinIdent
@@ -130,7 +115,8 @@ doKmdNotarisation :: [EthBlock] -> BitcoinUtxo -> Hath EthNotariser ()
 doKmdNotarisation blocks utxo = do
   ident <- getBitcoinIdent
   traceE "Building bitcoin tx" $ do
-    let tx = either error id $ getNotarisationTx ident utxo blocks
+    opRet <- getNotarisationOpReturn blocks <$> asks getCCId
+    let tx = either error id $ getNotarisationTx ident utxo blocks opRet
     logInfo $ "Sending KMD tx: " ++ show (H.txHash tx)
     -- queryBitcoin "sendrawtransaction" [tx]
 
@@ -148,19 +134,21 @@ chooseUtxo = listToMaybe . choose
     choose = reverse . sortOn (\c -> (utxoConfirmations c, utxoTxid c))
                      . filter ((==kmdInputAmount) . utxoAmount)
 
-getNotarisationTx :: BitcoinIdent -> BitcoinUtxo -> [EthBlock] -> Either String H.Tx
-getNotarisationTx (pk,myAddr) utxo blocks = 
+notarisationOutput0 = H.PayPKHash $ H.getAddrHash "RXL3YXG2ceaB6C5hfJcN4fvmLH2C34knhA"
+
+getNotarisationTx :: BitcoinIdent -> BitcoinUtxo -> [EthBlock] -> H.ScriptOutput
+                  -> Either String H.Tx
+getNotarisationTx (pk,myAddr) utxo blocks opRet = 
   let op = getOutPoint utxo
       os = H.PayPKHash $ H.getAddrHash myAddr
       sigIn = H.SigInput os op (H.SigAll False) Nothing
       outputAmount = round (kmdInputAmount/100*1e8)
-      opRet = traceShowId $ getNotarisationOpReturn blocks
-      etx = H.buildTx [H.sigDataOP sigIn] [(os, outputAmount), (opRet, 0)]
+      etx = H.buildTx [H.sigDataOP sigIn] [(notarisationOutput0, outputAmount), (opRet, 0)]
       signTx tx = H.signTx tx [sigIn] [pk]
    in etx >>= signTx
 
-getNotarisationOpReturn :: [EthBlock] -> H.ScriptOutput
-getNotarisationOpReturn blocks =
+getNotarisationOpReturn :: [EthBlock] -> Word16 -> H.ScriptOutput
+getNotarisationOpReturn blocks ccId =
   let notarised = last blocks
       mom = trieRoot $ receiptsRootTrieTrie blocks
       opReturn =
@@ -169,7 +157,7 @@ getNotarisationOpReturn blocks =
         <>            ("TESTETH\0")
         <> BS.reverse (unSha3 mom)
         <> BS.reverse (enc16 $ length blocks)
-        <> BS.reverse (enc16 65111)
+        <> BS.reverse (enc16 ccId)
    in H.DataCarrier opReturn
   where
     enc32 :: Integral a => a -> ByteString
