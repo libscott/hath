@@ -1,8 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Network.Ethereum.Crypto.TrieHash
-  ( Trie
+  ( Trie(..)
+  , Nibbles
+  , hexMapToTrie
   , mapToTrie
+  , trieProof
   , trieRoot
   ) where
 
