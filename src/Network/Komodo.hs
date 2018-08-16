@@ -20,7 +20,7 @@ komodo = Network
     , getExtPubKeyPrefix = 0x0488b21e
     , getExtSecretPrefix = 0x0488ade4
 
-    -- FROM HERE DOWN IS UNVERIFIED
+    -- FROM HERE DOWN IS UNVERIFIED AND WRONG
 
     , getNetworkMagic = 0xf9beb4d9
     , getGenesisHeader =

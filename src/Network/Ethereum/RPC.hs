@@ -3,9 +3,11 @@
 
 module Network.Ethereum.RPC
   ( GethConfig(..)
+  , EthBlock(..)
   , queryEthereum
   , readCall
   , postTransactionSync
+  , ethGetBlockByNumber
   ) where
 
 import           Control.Concurrent (threadDelay)
@@ -26,7 +28,7 @@ import           Hath.Prelude
 newtype GethConfig = GethConfig { gethEndpoint :: String }
   deriving (Show)
 
-queryEthereum :: (Has GethConfig r, FromJSON a) => Text -> [Value] -> Hath r a
+queryEthereum :: (Has GethConfig r, ToJSON b, FromJSON a) => Text -> b -> Hath r a
 queryEthereum method params = do
   endpoint <- asks $ gethEndpoint . has
   queryJsonRpc endpoint method params
@@ -45,7 +47,7 @@ postTransactionSync tx = do
   logInfo $ "Send transaction, txid: " <> show txid                                 
   fix $ \wait -> do                                                                 
         liftIO $ threadDelay 1000000                                                
-        txStatus <- queryEthereum "eth_getTransactionReceipt" [txid]                
+        txStatus <- queryEthereum "eth_getTransactionReceipt" [txid::Value]                
         if txStatus == Null                                                         
            then wait                                                                
            else if txStatus .? "{status}" == Just (U256 1)                      
@@ -59,3 +61,19 @@ instance FromJSON a => FromJSON (RPCMaybe a) where
   parseJSON (String "0x") = pure $ RPCMaybe Nothing
   parseJSON val = RPCMaybe . Just <$> parseJSON val
 
+
+ethGetBlockByNumber :: (Integral a, ToJSON a, Has GethConfig r) => a -> Hath r EthBlock
+ethGetBlockByNumber number = queryEthereum "eth_getBlockByNumber" (number, False)
+
+data EthBlock = EthBlock
+  { blockNumber :: U256
+  , blockHash :: Hex
+  , blockReceiptsRoot :: Hex
+  } deriving (Show)
+
+instance FromJSON EthBlock where
+  parseJSON val = do
+    obj <- parseJSON val
+    EthBlock <$> obj .: "number"
+             <*> obj .: "hash"
+             <*> obj .: "receiptsRoot"

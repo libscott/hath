@@ -8,9 +8,12 @@ module Network.Bitcoin where
 import qualified Data.Map as Map
 import qualified Data.ByteString as BS
 import           Data.Attoparsec.ByteString.Char8
+import           Data.Scientific
 
 import           Hath.Data.Aeson hiding (Parser)
 import           Hath.Prelude
+
+import qualified Network.Haskoin.Internals as H
 import           Network.HTTP.Simple
 
 
@@ -43,10 +46,10 @@ parseItem matchName parseVal = do
       skipLine = takeTill (=='\n') >> endOfLine
   user <|> (skipLine >> parseItem matchName parseVal)
 
-queryBitcoin :: (Has BitcoinConfig r, FromJSON a) => Text -> [Value] -> Hath r a
+queryBitcoin :: (Has BitcoinConfig r, FromJSON a, ToJSON b) => Text -> b -> Hath r a
 queryBitcoin method params = hasReader $ do
   (BitcoinConfig user pass port) <- ask
-  let body = "{jsonrpc,method,params,id}" .% (String "2.0", method, params, Null)
+  let body = "{jsonrpc,method,params,id}" .% (String "2.0", method, toJSON params, Null)
       req = setRequestBasicAuth user pass $ 
             setRequestBodyJSON body $
             setRequestPort port $ "POST http://localhost/"
@@ -56,3 +59,25 @@ queryBitcoin method params = hasReader $ do
   response <- httpJSONEither req
   traceE ("Bitcoin RPC: " ++ asString body) $
     either (error . show) interpret $ getResponseBody response
+
+bitcoinUtxos :: Has BitcoinConfig r => [H.Address] -> Hath r [BitcoinUtxo]
+bitcoinUtxos addrs = queryBitcoin "listunspent" (1::Int, 99999999::Int, addrs)
+
+
+data BitcoinUtxo = Utxo
+  { utxoAmount :: Scientific
+  , utxoConfirmations :: Int
+  , utxoTxid :: H.TxHash
+  , utxoVout :: Word32
+  } deriving (Show)
+
+instance FromJSON BitcoinUtxo where
+  parseJSON val = do
+    obj <- parseJSON val
+    Utxo <$> obj .: "amount"
+         <*> obj .: "confirmations"
+         <*> obj .: "txid"
+         <*> obj .: "vout"
+
+getOutPoint :: BitcoinUtxo -> H.OutPoint
+getOutPoint utxo = H.OutPoint (utxoTxid utxo) (utxoVout utxo)

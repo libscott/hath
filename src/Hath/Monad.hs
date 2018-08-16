@@ -5,12 +5,9 @@
 
 module Hath.Monad where
 
-import           Control.Monad.Fail
-import           Control.Monad.Except
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Control.Monad.Reader
-import qualified Control.Monad.Trans.Class as Trans
 
 
 newtype Hath r a = Hath (ReaderT r (LoggingT IO) a)

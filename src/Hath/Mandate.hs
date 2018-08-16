@@ -39,7 +39,7 @@ mandateGetState key = do
     unABI <$> readCall address (abi "getState(bytes32)" key)
 
 type Nonce = Int
-type Height = Int
+type Height = U256
 
 mandateGetNonce :: (Has Mandate r, Has GethConfig r) => Bytes 32 -> Hath r (Nonce, Height)
 mandateGetNonce key = do
@@ -47,22 +47,29 @@ mandateGetNonce key = do
   traceE "mandateGetNonce" $
     unABI <$> readCall address (abi "getNonce(bytes32)" key)
 
-mandateSetState :: (Has Mandate r, Has GethConfig r, PutABI a) => Bytes 32 -> a -> Hath r ()
-mandateSetState key val = do
+mandateIncNonce :: (Has Mandate r, Has GethConfig r) => Bytes 32 -> Hath r ()
+mandateIncNonce key = mandateProxy key nullAddress "" >> pure ()
+
+mandateProxy :: (Has Mandate r, Has GethConfig r) => Bytes 32 -> Address -> ByteString -> Hath r Value
+mandateProxy key target forwardCall = do
   address <- asks $ getAddress . has
-  let forwardCall = abi "setState(bytes32,string)" (key, val)
   nonce <- fst <$> mandateGetNonce key
-  let toSign = (address, forwardCall, key, nonce)
+  let toSign = (target, forwardCall, key, nonce)
   Just [crs] <- campaign toSign
   let sigData = exportMultisigABI [crs]
   -- for now just test
   let proxyMethod = "proxy(address,bytes,bytes32,uint256,bytes32[],bytes32[],bytes)"
-      callArgs = (address, (forwardCall, (key, (nonce, sigData))))
+      callArgs = (target, (forwardCall, (key, (nonce, sigData))))
       callData = abi proxyMethod callArgs
-
   tx <- makeTransaction address callData
-  out <- postTransactionSync tx
-  logInfo $ "tx result: " ++ asString out
+  postTransactionSync tx
+
+mandateSetState :: (Has Mandate r, Has GethConfig r, PutABI a) => Bytes 32 -> a -> Hath r ()
+mandateSetState key val = do
+  address <- asks $ getAddress . has
+  let forwardCall = abi "setState(bytes32,string)" (key, val)
+  out <- mandateProxy key address forwardCall
+  logInfo $ "setState result: " ++ asString out
 
 exportMultisigABI :: [CompactRecSig] -> ([Bytes 32], [Bytes 32], ByteString)
 exportMultisigABI sigs =

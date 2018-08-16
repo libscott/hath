@@ -20,13 +20,13 @@ import qualified Data.ByteString.Base16 as B16
 import Data.ByteString.Lazy as ALL (toStrict)
 import Data.ByteString.Short as ALL (toShort, fromShort)
 import Data.List as ALL (elemIndex, sort, sortOn)
-import Data.Maybe as ALL (catMaybes, fromJust, fromMaybe, mapMaybe)
+import Data.Maybe as ALL (catMaybes, fromJust, fromMaybe, mapMaybe, listToMaybe)
 import Data.Monoid as ALL
 import Data.Set as ALL (Set)
 import Data.String as ALL (IsString, fromString)
 import Data.Text as ALL (Text, unpack)
 import Data.Text.Encoding as ALL (encodeUtf8, decodeUtf8)
-import Data.Word as ALL (Word8, Word64)
+import Data.Word as ALL (Word8, Word32, Word64)
 
 import Network.Ethereum.Errors as ALL
 import Hath.Monad as ALL

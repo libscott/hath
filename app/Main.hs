@@ -42,7 +42,8 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Ethereum command line utils"
            (command "tx"        $ infoH txMethods         $ progDesc "tx methods")
         <> (command "keyPair"   $ infoH keyPairMethod     $ progDesc "generate a priv/pub key pair")
         <> (command "contract"  $ infoH contractMethods   $ progDesc "generate contracts")
-        <> (command "notariser" $ infoH notariserMethods  $ progDesc "notariser modes")
+        <> (command "notarise" $ infoH notariserMethods  $ progDesc "notariser modes")
+        <> (command "notarize" $ infoH notariserMethods  $ progDesc "notarizer modes")
 
     txMethods = subparser $
            (command "encode"    $ infoH encodeTxMethod    $ progDesc "encode a json transaction")

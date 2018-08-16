@@ -16,7 +16,7 @@ import           Hath.Monad
 import           Hath.Prelude
 
 
-runJsonRpc :: FromJSON a => Text -> [Value] -> (Value -> Hath r Value) -> Hath r a
+runJsonRpc :: FromJSON a => Text -> Value -> (Value -> Hath r Value) -> Hath r a
 runJsonRpc method params act = do
   let body = "{jsonrpc,method,params,id}" .% (String "2.0", method, params, Null)
       interpret v = case (v .? "{error:{message}}", v .? "{result}") of
@@ -45,8 +45,8 @@ queryIpc endpoint body = do
     runConduit conduit <* close sock
   either error pure out
 
-queryJsonRpc :: FromJSON a => String -> Text -> [Value] -> Hath r a
+queryJsonRpc :: (FromJSON a, ToJSON p) => String -> Text -> p -> Hath r a
 queryJsonRpc endpoint method params =
   traceE ("Json RPC: " ++ show (endpoint, method, asString $ toJSON params)) $ do
     let transport = if take 4 endpoint == "http" then queryHttp else queryIpc
-    runJsonRpc method params $ transport endpoint
+    runJsonRpc method (toJSON params) $ transport endpoint

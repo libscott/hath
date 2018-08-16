@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Network.Ethereum.Data.Hex
   ( Hex(..)
@@ -29,7 +30,7 @@ instance FromJSON Hex where
 
 
 newtype U256 = U256 { unU256 :: Integer }
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Enum, Num, Integral, Real)
 
 instance FromJSON U256 where
   parseJSON v = do

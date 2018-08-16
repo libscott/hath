@@ -2,31 +2,30 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Network.Ethereum.Crypto
-  ( module Crypto.Secp256k1
+  ( module ALL
   , Address(..)
   , CompactRecSig(..)
   , Ident
-  , Sha3(..)
   , pubKeyAddr
   , genSecKey
   , loadSecret
-  , sha3
-  , sha3'
+  , nullAddress
   ) where
 
 
 import           Control.Monad.Fail (MonadFail)
 
 import           Crypto.Hash
-import           Crypto.Secp256k1
+import           Crypto.Secp256k1 as ALL
 
-import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Base16 as B16
 import           Data.Monoid
 import qualified Data.Text as T
 
+import           Network.Ethereum.Crypto.Hash as ALL
+import           Network.Ethereum.Crypto.TrieHash as ALL
 import           Network.Ethereum.Data.Hex
 import           Network.Ethereum.Data.RLP
 import           Hath.Data.Aeson
@@ -60,6 +59,8 @@ instance FromJSON Address where
 instance ToJSON Address where
   toJSON (Address bs) = toJSON $ Hex bs
 
+nullAddress :: Address
+nullAddress = "0x0000000000000000000000000000000000000000"
 
 -- Orphan instance for CompactRecSig
 instance ToJSON CompactRecSig where
@@ -76,27 +77,6 @@ instance FromJSON CompactRecSig where
               "\1" -> f 1
               _      -> fail "Sig invalid"
   parseJSON _ = fail "Sig wrong type"
-
-newtype Sha3 = Sha3 { unSha3 :: ByteString }
-  deriving (Eq, Ord, RLPSerializable)
-
-instance Show Sha3 where
-  show (Sha3 bs) = asString (toHex bs)
-
-instance Read Sha3 where
-  readsPrec _ s =
-    if length s == 64
-       then [(Sha3 $ fromHex $ fromString s, "")]
-       else []
-
-instance IsString Sha3 where
-  fromString s = read s
-
-sha3' :: ByteString -> ByteString
-sha3' bs = BS.pack (BA.unpack (hash bs :: Digest Keccak_256))
-
-sha3 :: ByteString -> Sha3
-sha3 = Sha3 . sha3'
 
 pubKeyAddr :: PubKey -> Address
 pubKeyAddr = Address . BS.drop 12 . sha3' . BS.drop 1 . exportPubKey False

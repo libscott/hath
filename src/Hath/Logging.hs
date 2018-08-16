@@ -5,6 +5,7 @@ module Hath.Logging
   , logDebug
   , logInfo
   , logError
+  , logWarn
   , AsString
   , asString
   ) where
@@ -12,7 +13,7 @@ module Hath.Logging
 import Data.Aeson
 import qualified Data.ByteString.Char8 as BS8
 import Data.ByteString.Lazy (toStrict)
-import Control.Monad.Logger as LOG hiding (logDebug, logInfo, logError)
+import Control.Monad.Logger as LOG hiding (logDebug, logInfo, logError, logWarn)
 
 import Data.String (fromString)
 
@@ -24,6 +25,9 @@ logInfo = logInfoN . fromString
 
 logError :: MonadLogger m => String -> m ()
 logError = logErrorN . fromString
+
+logWarn :: MonadLogger m => String -> m ()
+logWarn = logWarnN . fromString
 
 
 

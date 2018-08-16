@@ -49,6 +49,7 @@ dependencies:
 - pretty-simple
 - QuickCheck
 - resourcet
+- scientific
 - secp256k1
 - text
 - transformers

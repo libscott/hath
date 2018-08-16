@@ -1,18 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Network.Ethereum.Crypto.TrieHash where
+module Network.Ethereum.Crypto.TrieHash
+  ( Trie
+  , mapToTrie
+  , trieRoot
+  ) where
 
 import qualified Data.ByteString as BS
 
-import           Network.Ethereum.Crypto
+import           Network.Ethereum.Crypto.Hash
 import           Network.Ethereum.Data.RLP
 
 import           Hath.Prelude
 
 
 type Nibbles = [Word8]
-type BytesMap = [(ByteString, ByteString)]
-type HexMap = [(Nibbles, ByteString)]
 data Trie = Branch16 [Trie] ByteString
           | Leaf Nibbles ByteString
           | Prefix Nibbles Trie
@@ -79,6 +81,8 @@ execTrieProof n p t = trieRoot $ trieProof n p t
 
 -- Creation -------------------------------------------------------------------
 --
+type HexMap = [(Nibbles, ByteString)]
+
 hexMapToTrie :: HexMap -> Trie
 hexMapToTrie []      = N
 hexMapToTrie [(k,v)] = Leaf k v
