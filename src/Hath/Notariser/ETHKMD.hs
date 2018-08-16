@@ -1,8 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DataKinds #-}
 
 module Hath.Notariser.ETHKMD where
 
+import qualified Data.ByteString as BS
 import qualified Data.Serialize as Ser
 
 import           Control.Concurrent (threadDelay)
@@ -25,14 +27,14 @@ import           Hath.Monad
 import           Hath.Prelude
 
 
+-- Copy receipt roots from ETH to KMD to enable proof checking on KMD
+
+
 ethKmd :: Bytes 32
 ethKmd = "ETHKMD"
 
 kmdInputAmount :: Scientific
 kmdInputAmount = 0.00098
-
-
--- Copy MoMs from ETH to KMD
 
 
 data EthNotariser = EthNotariser
@@ -162,16 +164,18 @@ getNotarisationOpReturn blocks =
   let notarised = last blocks
       mom = trieRoot $ receiptsRootTrieTrie blocks
       opReturn =
-           (unHex $ blockHash notarised)
-        <> (enc32 $ blockNumber notarised)
-        <> ("TESTETH\0")
-        <> unSha3 mom
-        <> (enc32 $ length blocks)
-        <> (enc32 $ 2)
+           BS.reverse (unHex $ blockHash notarised)
+        <> BS.reverse (enc32 $ blockNumber notarised)
+        <>            ("TESTETH\0")
+        <> BS.reverse (unSha3 mom)
+        <> BS.reverse (enc16 $ length blocks)
+        <> BS.reverse (enc16 65111)
    in H.DataCarrier opReturn
   where
     enc32 :: Integral a => a -> ByteString
     enc32 a = Ser.encode (fromIntegral a :: Word32)
+    enc16 :: Integral a => a -> ByteString
+    enc16 a = Ser.encode (fromIntegral a :: Word16)
     receiptsRootTrieTrie headers =
       let (heights, roots) = (blockNumber <$> headers, blockReceiptsRoot <$> headers)
           keys = rlpSerialize . rlpEncode . unU256 <$> heights

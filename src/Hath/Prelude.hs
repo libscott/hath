@@ -26,7 +26,7 @@ import Data.Set as ALL (Set)
 import Data.String as ALL (IsString, fromString)
 import Data.Text as ALL (Text, unpack)
 import Data.Text.Encoding as ALL (encodeUtf8, decodeUtf8)
-import Data.Word as ALL (Word8, Word32, Word64)
+import Data.Word as ALL (Word8, Word16, Word32, Word64)
 
 import Network.Ethereum.Errors as ALL
 import Hath.Monad as ALL

@@ -34,7 +34,7 @@ main = join $ customExecParser (prefs showHelpOnEmpty) parseAct
 type Method = IO ()
 
 parseAct :: ParserInfo Method
-parseAct = infoH topMethods $ fullDesc <> progDesc "Ethereum command line utils"
+parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line utils"
   where
     infoH m = info $ m <**> helper
 
@@ -43,7 +43,6 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Ethereum command line utils"
         <> (command "keyPair"   $ infoH keyPairMethod     $ progDesc "generate a priv/pub key pair")
         <> (command "contract"  $ infoH contractMethods   $ progDesc "generate contracts")
         <> (command "notarise" $ infoH notariserMethods  $ progDesc "notariser modes")
-        <> (command "notarize" $ infoH notariserMethods  $ progDesc "notarizer modes")
 
     txMethods = subparser $
            (command "encode"    $ infoH encodeTxMethod    $ progDesc "encode a json transaction")
