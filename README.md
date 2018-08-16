@@ -1,8 +1,6 @@
-# hath
+# Hath
 
-Ethereum transaction utility for offline signing.
-
-Not very polished, probably never will be, might be good reference material though.
+Various utilities for interacting with Bitcoin & Ethereum blockchains.
 
 ## Installation
 
@@ -13,7 +11,7 @@ $ git clone https://github.com/libscott/hath
 $ cd hath
 $ stack install
 [...]
-Copied executables to /home/scott/.local/bin:
+Copied executables to /home/[you]/.local/bin:
 - hath
 ```
 
