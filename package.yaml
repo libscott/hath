@@ -27,6 +27,7 @@ dependencies:
 - ansi-wl-pprint
 - attoparsec
 - base16-bytestring
+- binary
 - bytestring
 - cereal
 - conduit
@@ -34,6 +35,8 @@ dependencies:
 - containers
 - cryptonite
 - directory
+- distributed-process
+- distributed-process-p2p
 - entropy
 - haskoin-core
 - hassembly-evm
@@ -52,6 +55,7 @@ dependencies:
 - scientific
 - secp256k1
 - text
+- time
 - transformers
 - unordered-containers
 

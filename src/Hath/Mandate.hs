@@ -16,22 +16,25 @@ import           Network.Ethereum.Transaction
 import           Hath.Data.Aeson
 import           Hath.Monad
 import           Hath.Prelude
+import           Hath.Mandate.Agree
 
 
 data Mandate = Mandate
   { getAddress :: Address
-  , getRequiredSigs :: Int
-  , getMembers :: [Address]
   , getMe :: Ident
   , getChainId :: Integer
   } deriving (Show)
 
+mandateGetMembers :: (Has Mandate r, Has GethConfig r) => Hath r (Int, [Address])
+mandateGetMembers = do
+  addr <- asks $ getAddress . has
+  unABI <$> readCall addr (abi "getMembers()" ())
+
 loadMandate :: Has GethConfig r => Ident -> Address -> Integer -> Hath r Mandate
 loadMandate me mandateAddr chainId =
   traceE "loadMandate" $ do
-    ABI (r,m) <- readCall mandateAddr $ abi "getMembers()" ()
     logInfo $ "Loaded mandate at addr: " ++ show mandateAddr
-    pure $ Mandate mandateAddr r m me chainId
+    pure $ Mandate mandateAddr me chainId
 
 mandateGetState :: (Has Mandate r, Has GethConfig r, GetABI a) => Bytes 32 -> Hath r a
 mandateGetState key = do
@@ -83,13 +86,19 @@ exportMultisigABI sigs =
 campaign :: (Has Mandate r, Has GethConfig r, PutABI a) => a -> Hath r (Maybe [CompactRecSig])
 campaign a = do
   logInfo "Collecting sigs..."
-  -- for now there's only one of me
   (sk,_) <- asks $ getMe . has
+  (r, m) <- mandateGetMembers
   let ethPrefix = "\x19\&Ethereum Signed Message:\n32"
       Just message = msg $ sha3' $ ethPrefix <> sha3' (abi "" a)
       crs = exportCompactRecSig $ signRecMsg sk message
-  logInfo $ "Message hash: " ++ show message
-  pure $ Just [crs]
+  
+  (enough, sigs) <- liftIO $ agreeCollectSigs message crs r m
+  pure $ if enough then Just (snd <$> sigs) else Nothing
+
+
+  -- for now there's only one of me
+  --logInfo $ "Message hash: " ++ show message
+  --pure $ Just [crs]
 
 makeTransaction :: (Has GethConfig r, Has Mandate r) => Address -> ByteString -> Hath r Transaction
 makeTransaction dest callData = do

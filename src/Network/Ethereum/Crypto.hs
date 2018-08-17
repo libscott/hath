@@ -10,6 +10,7 @@ module Network.Ethereum.Crypto
   , genSecKey
   , loadSecret
   , nullAddress
+  , recoverAddr
   ) where
 
 
@@ -21,6 +22,7 @@ import           Crypto.Secp256k1 as ALL
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Base16 as B16
+import           Data.Binary
 import           Data.Monoid
 import qualified Data.Text as T
 
@@ -35,7 +37,7 @@ import           System.Entropy
 
 
 newtype Address = Address { fromAddress :: ByteString }
-  deriving (Eq)
+  deriving (Eq, Ord)
 
 instance Show Address where
   show (Address bs) = "0x" <> BS8.unpack (B16.encode bs)
@@ -78,8 +80,17 @@ instance FromJSON CompactRecSig where
               _      -> fail "Sig invalid"
   parseJSON _ = fail "Sig wrong type"
 
+instance Binary CompactRecSig where
+  put (CompactRecSig r s v) = put r >> put s >> put v
+  get = CompactRecSig <$> get <*> get <*> get
+
 pubKeyAddr :: PubKey -> Address
 pubKeyAddr = Address . BS.drop 12 . sha3' . BS.drop 1 . exportPubKey False
+
+recoverAddr :: Msg -> CompactRecSig -> Maybe Address
+recoverAddr msg crs = do
+  rs <- importCompactRecSig crs
+  pubKeyAddr <$> recover rs msg
 
 type Ident = (SecKey, Address)
 
@@ -94,3 +105,6 @@ genSecKey = do
   case secKey bytes of
        Just sk -> pure sk
        Nothing -> fail "IO error generating secret key"
+
+toMsg :: ByteString -> Msg
+toMsg = fromJust . msg . sha3'

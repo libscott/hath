@@ -23,6 +23,7 @@ import           Network.Komodo
 import           Hath.Config
 import           Hath.Data.Aeson
 import           Hath.Mandate
+import           Hath.Mandate.Agree
 import           Hath.Monad
 import           Hath.Prelude
 

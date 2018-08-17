@@ -17,6 +17,7 @@ import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Transaction
 
 import           Hath.Notariser.ETHKMD
+import           Hath.Mandate.Agree
 import           Hath.Data.Aeson hiding (Parser)
 import           Hath.Monad
 import           Hath.Prelude
@@ -39,9 +40,9 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
     infoH m = info $ m <**> helper
 
     topMethods = subparser $
-           (command "tx"        $ infoH txMethods         $ progDesc "tx methods")
-        <> (command "keyPair"   $ infoH keyPairMethod     $ progDesc "generate a priv/pub key pair")
-        <> (command "contract"  $ infoH contractMethods   $ progDesc "generate contracts")
+           (command "tx"       $ infoH txMethods         $ progDesc "tx methods")
+        <> (command "keyPair"  $ infoH keyPairMethod     $ progDesc "generate a priv/pub key pair")
+        <> (command "contract" $ infoH contractMethods   $ progDesc "generate contracts")
         <> (command "notarise" $ infoH notariserMethods  $ progDesc "notariser modes")
 
     txMethods = subparser $
@@ -55,7 +56,8 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
            (command "contractProxy" $ infoH contractProxyMethod $ progDesc "get code for proxy contract")
 
     notariserMethods = subparser $
-           (command "ethkmd" $ infoH runEthNotariserMethod $ progDesc "run ETH -> KMD notariser")
+           (command "ethkmd" $ infoH runEthNotariserMethod  $ progDesc "run ETH -> KMD notariser")
+        <> (command "seed"   $ infoH runSeedNotariserMethod $ progDesc "run notariser seed node")
 
 
 jsonMethod :: IO Value -> Method
@@ -131,3 +133,6 @@ runEthNotariserMethod = act <$> optional optAddress
   where
     optAddress = option auto (long "mandate" <> metavar "[mandate address]")
     act addr = ethNotariser addr >>= either error pure
+
+runSeedNotariserMethod :: Parser Method
+runSeedNotariserMethod = pure runSeed

@@ -9,6 +9,7 @@ module Hath.Prelude
   ) where
 
 import Control.Applicative as ALL
+import Control.Concurrent as ALL (threadDelay)
 import Control.Exception as ALL
 import Control.Monad as ALL (forM, forM_, join, when, replicateM)
 import Control.Monad.IO.Class as ALL (liftIO)
