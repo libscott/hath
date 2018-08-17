@@ -1,4 +1,3 @@
-
 module Hath.Mandate.Agree where
 
 import           Control.Monad
@@ -9,8 +8,11 @@ import qualified Control.Distributed.Backend.P2P as P2P
 import           Control.Distributed.Process as DP
 import           Control.Distributed.Process.Node as DPN
 
+import           Data.Binary
+import qualified Data.Serialize as Ser
 import qualified Data.Map as Map
 import           Data.Time.Clock
+import           Data.Typeable
 
 import           Network.Ethereum.Crypto
 import           Hath.Prelude
@@ -24,43 +26,64 @@ runSeed = do
   node <- P2P.createLocalNode host port ext initRemoteTable
   runProcess node $ P2P.peerController []
 
-runAgree :: Process a -> IO a
-runAgree act = do
+
+data AgreementProcess = AgreementProcess
+  { apNode :: LocalNode
+  , apPid :: ProcessId
+  , apHandoff :: MVar (Process ())
+  }
+
+spawnAgree :: IO AgreementProcess
+spawnAgree = do
   let host = "localhost"
       port = "18088"
       ext = const (host, port)
       seeds = [P2P.makeNodeId "localhost:18089"]
 
-  outVar <- newEmptyMVar
+  handoff <- newEmptyMVar
 
-  node <- P2P.createLocalNode host port ext initRemoteTable
-  _ <- forkProcess node $ P2P.peerController seeds
-  runProcess node $ P2P.waitController $
-    act >>= liftIO . putMVar outVar
-  closeLocalNode node
-  takeMVar outVar
+  (node, pid) <- P2P.bootstrapNonBlocking host port ext initRemoteTable seeds $ do
+    forever $ do
+      join $ liftIO $ takeMVar handoff
+
+  pure $ AgreementProcess node pid handoff
+
+runAgree :: Has AgreementProcess r => Process a -> Hath r a
+runAgree act = do
+  workQueue <- asks $ apHandoff . has
+  liftIO $ do
+    ret <- newEmptyMVar
+    putMVar workQueue $
+      act >>= liftIO . putMVar ret
+    takeMVar ret
 
 
-agreeCollectSigs :: Msg -> CompactRecSig -> Int -> [Address] ->
-                    IO (Bool, [(Address, CompactRecSig)])
-agreeCollectSigs message sig sigsRequired members = do
+data Ballot a = Ballot
+  { bMember :: Address
+  , bSig :: CompactRecSig
+  , bData :: a
+  } deriving (Show)
+
+agreeCollectSigs :: (Ser.Serialize a, Typeable a) => Msg -> Ballot a -> [Address] ->
+                    Hath AgreementProcess [Ballot a]
+agreeCollectSigs message myBallot members = do
   let topic = asString $ getMsg message
-      Just myAddress = recoverAddr message sig
+      (Ballot myAddress mySig myData) = myBallot
 
-  startTime <- getCurrentTime
+  startTime <- liftIO $ getCurrentTime
 
-  let f sigs | Map.size sigs >= sigsRequired = pure sigs
+  let f sigs | Map.size sigs == length members = pure sigs
       f sigs = do
         t <- diffUTCTime <$> liftIO getCurrentTime <*> pure startTime
         let ms = round $ realToFrac t * 1000
-        mTheirSig <- expectTimeout ms :: Process (Maybe CompactRecSig)
-
+        mTheirSig <- expectTimeout ms
+        
         case mTheirSig of
-             Just theirSig ->
+             Just (theirSig, SerBinary obj) ->
                case recoverAddr message theirSig of
                     Just addr ->
                       if elem addr members
-                         then f $ Map.insert addr theirSig sigs
+                         then f $ Map.insert addr (Ballot addr theirSig obj) sigs
                          else do
                            say $ "Not member: " ++ show addr
                            f sigs
@@ -71,9 +94,17 @@ agreeCollectSigs message sig sigsRequired members = do
 
   runAgree $ do
     getSelfPid >>= register topic
-    P2P.nsendPeers topic sig
-    out <- f $ Map.singleton myAddress sig
+    P2P.nsendPeers topic (mySig, SerBinary myData)
+    out <- f $ Map.singleton myAddress myBallot
     unregister topic
-    liftIO $ threadDelay 1000000
-    pure (length out >= sigsRequired, Map.toList out)
+    pure $ snd <$> Map.toList out
 
+
+newtype SerBinary a = SerBinary { unSerBinary :: a }
+  deriving (Typeable)
+
+instance Ser.Serialize a => Binary (SerBinary a) where
+  put = put . Ser.encode . unSerBinary
+  get = do
+    bs <- get
+    either fail (pure . SerBinary) $ Ser.decode bs

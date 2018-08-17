@@ -7,6 +7,7 @@ module Hath.Mandate where
 
 import qualified Data.ByteString as BS
 import           Data.Serialize
+import           Data.Typeable
 
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data
@@ -23,7 +24,11 @@ data Mandate = Mandate
   { getAddress :: Address
   , getMe :: Ident
   , getChainId :: Integer
-  } deriving (Show)
+  , getProc :: AgreementProcess
+  }
+
+instance Has AgreementProcess Mandate where
+  has = getProc
 
 mandateGetMembers :: (Has Mandate r, Has GethConfig r) => Hath r (Int, [Address])
 mandateGetMembers = do
@@ -33,8 +38,9 @@ mandateGetMembers = do
 loadMandate :: Has GethConfig r => Ident -> Address -> Integer -> Hath r Mandate
 loadMandate me mandateAddr chainId =
   traceE "loadMandate" $ do
+    proc <- liftIO $ spawnAgree
     logInfo $ "Loaded mandate at addr: " ++ show mandateAddr
-    pure $ Mandate mandateAddr me chainId
+    pure $ Mandate mandateAddr me chainId proc
 
 mandateGetState :: (Has Mandate r, Has GethConfig r, GetABI a) => Bytes 32 -> Hath r a
 mandateGetState key = do
@@ -54,19 +60,30 @@ mandateGetNonce key = do
 mandateIncNonce :: (Has Mandate r, Has GethConfig r) => Bytes 32 -> Hath r ()
 mandateIncNonce key = mandateProxy key nullAddress "" >> pure ()
 
-mandateProxy :: (Has Mandate r, Has GethConfig r) => Bytes 32 -> Address -> ByteString -> Hath r Value
+data AgreeFail = AgreeFail deriving (Show)
+instance Exception AgreeFail
+
+mandateProxy :: (Has Mandate r, Has GethConfig r) => Bytes 32 -> Address -> ByteString ->
+                Hath r Value
 mandateProxy key target forwardCall = do
   address <- asks $ getAddress . has
   nonce <- fst <$> mandateGetNonce key
-  let toSign = (target, forwardCall, key, nonce)
-  Just [crs] <- campaign toSign
-  let sigData = exportMultisigABI [crs]
-  -- for now just test
-  let proxyMethod = "proxy(address,bytes,bytes32,uint256,bytes32[],bytes32[],bytes)"
+
+  let toSign = ethMsg (target, forwardCall, key, nonce)
+  results <- campaign toSign ()
+  requiredSigs <- fst <$> mandateGetMembers
+  when (length results < requiredSigs) (throw AgreeFail)
+
+  let sigData = exportMultisigABI $ bSig <$> results
+      proxyMethod = "proxy(address,bytes,bytes32,uint256,bytes32[],bytes32[],bytes)"
       callArgs = (target, (forwardCall, (key, (nonce, sigData))))
       callData = abi proxyMethod callArgs
+
   tx <- makeTransaction address callData
   postTransactionSync tx
+
+ethMsg :: PutABI a => a -> Msg
+ethMsg a = toMsg $ "\x19\&Ethereum Signed Message:\n32" <> abi "" a
 
 mandateSetState :: (Has Mandate r, Has GethConfig r, PutABI a) => Bytes 32 -> a -> Hath r ()
 mandateSetState key val = do
@@ -83,22 +100,14 @@ exportMultisigABI sigs =
       , BS.pack $ getCompactRecSigV <$> sigs
       )
 
-campaign :: (Has Mandate r, Has GethConfig r, PutABI a) => a -> Hath r (Maybe [CompactRecSig])
-campaign a = do
+-- Collect signatures and payloads from members
+campaign :: (Has Mandate r, Has GethConfig r, Serialize a, Typeable a) => Msg -> a -> Hath r [Ballot a]
+campaign message myData = do
   logInfo "Collecting sigs..."
-  (sk,_) <- asks $ getMe . has
-  (r, m) <- mandateGetMembers
-  let ethPrefix = "\x19\&Ethereum Signed Message:\n32"
-      Just message = msg $ sha3' $ ethPrefix <> sha3' (abi "" a)
-      crs = exportCompactRecSig $ signRecMsg sk message
-  
-  (enough, sigs) <- liftIO $ agreeCollectSigs message crs r m
-  pure $ if enough then Just (snd <$> sigs) else Nothing
-
-
-  -- for now there's only one of me
-  --logInfo $ "Message hash: " ++ show message
-  --pure $ Just [crs]
+  (sk,myAddr) <- asks $ getMe . has
+  (_, m) <- mandateGetMembers
+  let crs = exportCompactRecSig $ signRecMsg sk message
+  hathReader (getProc . has) $ agreeCollectSigs message (Ballot myAddr crs myData) m
 
 makeTransaction :: (Has GethConfig r, Has Mandate r) => Address -> ByteString -> Hath r Transaction
 makeTransaction dest callData = do
@@ -111,4 +120,3 @@ makeTransaction dest callData = do
   let gas = 1000000
   let tx = Tx nonce 0 (Just dest) Nothing gasPrice (gas*2) callData chainID
   pure $ signTx tx sk
-

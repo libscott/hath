@@ -10,14 +10,17 @@ module Network.Ethereum.Crypto
   , genSecKey
   , loadSecret
   , nullAddress
+  , recover
   , recoverAddr
+  , toMsg
   ) where
 
 
 import           Control.Monad.Fail (MonadFail)
 
 import           Crypto.Hash
-import           Crypto.Secp256k1 as ALL
+import           Crypto.Secp256k1 as ALL hiding (recover)
+import qualified Crypto.Secp256k1 as Secp256k1
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
@@ -105,6 +108,13 @@ genSecKey = do
   case secKey bytes of
        Just sk -> pure sk
        Nothing -> fail "IO error generating secret key"
+
+recover :: RecSig -> Msg -> Maybe PubKey
+recover rs message =
+  let s = convertRecSig rs
+      (_, bad) = normalizeSig s
+   in if bad then Nothing
+             else Secp256k1.recover rs message
 
 toMsg :: ByteString -> Msg
 toMsg = fromJust . msg . sha3'

@@ -29,7 +29,11 @@ import           Hath.Prelude
 
 
 -- Copy receipt roots from ETH to KMD to enable proof checking on KMD
+-- TODO: Verify that requiredSigs >= notaryTxSigs
 
+
+notaryTxSigs :: Int
+notaryTxSigs = 11
 
 ethKmd :: Bytes 32
 ethKmd = "ETHKMD"
@@ -37,13 +41,16 @@ ethKmd = "ETHKMD"
 kmdInputAmount :: Scientific
 kmdInputAmount = 0.00098
 
+notarisationRecip :: H.ScriptOutput
+notarisationRecip = H.PayPKHash $ H.getAddrHash "RXL3YXG2ceaB6C5hfJcN4fvmLH2C34knhA"
+
 
 data EthNotariser = EthNotariser
   { getKomodoConfig :: BitcoinConfig
   , gethConfig :: GethConfig
   , getMandate :: Mandate
   , getCCId :: Word16
-  } deriving (Show)
+  }
 
 instance Has GethConfig EthNotariser where
   has = gethConfig
@@ -114,12 +121,27 @@ notariseToKmd (from, to) = do
 
 doKmdNotarisation :: [EthBlock] -> BitcoinUtxo -> Hath EthNotariser ()
 doKmdNotarisation blocks utxo = do
-  ident <- getBitcoinIdent
-  traceE "Building bitcoin tx" $ do
-    opRet <- getNotarisationOpReturn blocks <$> asks getCCId
-    let tx = either error id $ getNotarisationTx ident utxo blocks opRet
-    logInfo $ "Sending KMD tx: " ++ show (H.txHash tx)
-    -- queryBitcoin "sendrawtransaction" [tx]
+  ident@(_, myAddr) <- getBitcoinIdent
+  opRet <- getNotarisationOpReturn blocks <$> asks getCCId
+  
+  -- Collect sigs
+  -- Topic hash is the opret
+  -- campaign for sigs on the opret then make selection
+
+
+  let message = toMsg opRet
+  results <- campaign (toMsg opRet) (myAddr, getOutPoint utxo)
+  (r, _) <- mandateGetMembers
+  if length results >= r
+     then do
+       traceE "Building bitcoin tx" $ do
+         let tx = either error id $ buildNotarisationTx ident results $ H.DataCarrier opRet
+         -- logInfo $ "Sending KMD tx: " ++ show (H.txHash tx)
+         -- queryBitcoin "sendrawtransaction" [tx]
+         undefined
+     else undefined
+    
+
 
 type BitcoinIdent = (H.PrvKey, H.Address)
 
@@ -135,20 +157,18 @@ chooseUtxo = listToMaybe . choose
     choose = reverse . sortOn (\c -> (utxoConfirmations c, utxoTxid c))
                      . filter ((==kmdInputAmount) . utxoAmount)
 
-notarisationOutput0 = H.PayPKHash $ H.getAddrHash "RXL3YXG2ceaB6C5hfJcN4fvmLH2C34knhA"
+buildNotarisationTx :: BitcoinIdent -> [Ballot (H.Address, H.OutPoint)] -> H.ScriptOutput -> Either String H.Tx
+buildNotarisationTx (pk,myAddr) ballots opRet =
+  let toSigIn (a, o) = H.SigInput (H.PayPKHash $ H.getAddrHash a) o (H.SigAll False) Nothing
+      inputs = take notaryTxSigs $ toSigIn . bData <$> sortOn bSig ballots
 
-getNotarisationTx :: BitcoinIdent -> BitcoinUtxo -> [EthBlock] -> H.ScriptOutput
-                  -> Either String H.Tx
-getNotarisationTx (pk,myAddr) utxo blocks opRet = 
-  let op = getOutPoint utxo
-      os = H.PayPKHash $ H.getAddrHash myAddr
-      sigIn = H.SigInput os op (H.SigAll False) Nothing
-      outputAmount = round (kmdInputAmount/100*1e8)
-      etx = H.buildTx [H.sigDataOP sigIn] [(notarisationOutput0, outputAmount), (opRet, 0)]
-      signTx tx = H.signTx tx [sigIn] [pk]
+      outputAmount = round (kmdInputAmount/100*1e8) -- TODO: calc based on inputs
+      outputs = [(notarisationRecip, outputAmount), (opRet, 0)]
+      etx = H.buildTx (H.sigDataOP <$> inputs) outputs
+      signTx tx = H.signTx tx inputs [pk]
    in etx >>= signTx
 
-getNotarisationOpReturn :: [EthBlock] -> Word16 -> H.ScriptOutput
+getNotarisationOpReturn :: [EthBlock] -> Word16 -> ByteString
 getNotarisationOpReturn blocks ccId =
   let notarised = last blocks
       mom = trieRoot $ receiptsRootTrieTrie blocks
@@ -159,7 +179,7 @@ getNotarisationOpReturn blocks ccId =
         <> BS.reverse (unSha3 mom)
         <> BS.reverse (enc16 $ length blocks)
         <> BS.reverse (enc16 ccId)
-   in H.DataCarrier opReturn
+   in opReturn
   where
     enc32 :: Integral a => a -> ByteString
     enc32 a = Ser.encode (fromIntegral a :: Word32)
