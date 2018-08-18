@@ -44,6 +44,9 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.Set as S
 import Data.Maybe (isJust)
 
+import Data.Binary
+import Data.Typeable
+
 -- * Peer-to-peer API
 
 type Peers = S.Set ProcessId
@@ -126,6 +129,7 @@ peerController seeds = do
     forever $ receiveWait [ matchIf isPeerDiscover $ onDiscover state
                           , match $ onMonitor state
                           , match $ onPeerRequest state
+                          , match $ onPeerResponse state
                           , match $ onPeerQuery state
                           , match $ onPeerCapable
                           ]
@@ -161,22 +165,28 @@ isPeerDiscover :: WhereIsReply -> Bool
 isPeerDiscover (WhereIsReply service pid) =
     service == peerControllerService && isJust pid
 
+data GiveMePeers = GiveMePeers
+  deriving (Typeable)
+
+instance Binary GiveMePeers where
+  put GiveMePeers = pure ()
+  get = pure GiveMePeers
+
 onDiscover :: PeerState -> WhereIsReply -> Process ()
 onDiscover _     (WhereIsReply _ Nothing) = return ()
 onDiscover state (WhereIsReply _ (Just seedPid)) = do
     say $ "Peer discovered: " ++ show seedPid
-
-    (sp, rp) <- newChan
     self <- getSelfPid
-    send seedPid (self, sp :: SendPort Peers)
-    say $ "Waiting for peers..."
-    peers <- receiveChan rp
+    send seedPid (self, GiveMePeers)
 
-    known <- liftIO $ readMVar (p2pPeers state)
+onPeerResponse :: PeerState -> (ProcessId, Peers) -> Process ()
+onPeerResponse state (peer, peers) = do
+    say $ "Got peers from: " ++ show peer
+    known <- liftIO $ readMVar $ p2pPeers state
     mapM_ (doRegister state) (S.toList $ S.difference peers known)
 
-onPeerRequest :: PeerState -> (ProcessId, SendPort Peers) -> Process ()
-onPeerRequest PeerState{..} (peer, replyTo) = do
+onPeerRequest :: PeerState -> (ProcessId, GiveMePeers) -> Process ()
+onPeerRequest PeerState{..} (peer, _) = do
     say $ "Peer exchange with " ++ show peer
     peers <- liftIO $ takeMVar p2pPeers
     if S.member peer peers
@@ -185,7 +195,8 @@ onPeerRequest PeerState{..} (peer, replyTo) = do
             _ <- monitor peer
             liftIO $ putMVar p2pPeers (S.insert peer peers)
 
-    sendChan replyTo peers
+    self <- getSelfPid
+    send peer (self, peers)
 
 onPeerQuery :: PeerState -> SendPort Peers -> Process ()
 onPeerQuery PeerState{..} replyTo = do
