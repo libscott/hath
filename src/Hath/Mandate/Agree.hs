@@ -6,7 +6,6 @@ import           Control.Monad
 import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.MVar
 
-import qualified Control.Distributed.Backend.P2P as P2P
 import           Control.Distributed.Process as DP
 import           Control.Distributed.Process.Node as DPN
 
@@ -17,6 +16,7 @@ import           Data.Time.Clock
 import           Data.Typeable
 
 import           Network.Ethereum.Crypto
+import qualified Hath.Mandate.P2P as P2P
 import           Hath.Prelude
 
 
@@ -31,8 +31,6 @@ runSeed = do
 
 data AgreementProcess = AgreementProcess
   { apNode :: LocalNode
-  , apPid :: ProcessId
-  , apHandoff :: MVar (Process ())
   }
 
 spawnAgree :: String -> String -> IO AgreementProcess
@@ -40,23 +38,17 @@ spawnAgree seed port = do
   let host = "localhost"
       ext = const (host, port)
       seeds = [P2P.makeNodeId seed]
+  (node, _) <- P2P.startP2P host port ext initRemoteTable seeds
+  pure $ AgreementProcess node
 
-  handoff <- newEmptyMVar
-
-  (node, pid) <- P2P.bootstrapNonBlocking host port ext initRemoteTable seeds $ do
-    forever $ do
-      join $ liftIO $ takeMVar handoff
-
-  pure $ AgreementProcess node pid handoff
 
 runAgree :: Has AgreementProcess r => Process a -> Hath r a
 runAgree act = do
-  workQueue <- asks $ apHandoff . has
+  node <- asks $ apNode . has
   liftIO $ do
-    ret <- newEmptyMVar
-    putMVar workQueue $
-      act >>= liftIO . putMVar ret
-    takeMVar ret
+    handoff <- newEmptyMVar
+    runProcess node $ act >>= liftIO . putMVar handoff
+    takeMVar handoff
 
 
 data Ballot a = Ballot
@@ -86,9 +78,6 @@ agreeCollectSigs message myBallot members = do
              Nothing -> pure sigs -- Timeout
              Just (theirSig, SerBinary obj) ->
                case recoverAddr message theirSig of
-                    Nothing -> do
-                      say "Signature recovery failed"
-                      f sigs
                     Just addr ->
                       if elem addr members
                          then do
@@ -98,6 +87,9 @@ agreeCollectSigs message myBallot members = do
                          else do
                            say $ "Not member: " ++ show addr
                            f sigs
+                    Nothing -> do
+                      say "Signature recovery failed"
+                      f sigs
 
   runAgree $ do
     liftIO $ threadDelay 500000

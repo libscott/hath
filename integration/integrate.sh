@@ -7,16 +7,13 @@ tmux split-window -v -t 0
 tmux split-window -v -t 1
 tmux split-window -v -t 2
 
-tmux send-keys -t 3 "stack runhaskell app/Main.hs -- notarise seed" Enter
+hath="stack exec hath --"
 
-sleep 1
-tmux send-keys -t 1 "stack runhaskell app/Main.hs -- notarise ethkmd --config integration/hath-0.json" Enter
-sleep 1
-tmux send-keys -t 2 "stack runhaskell app/Main.hs -- notarise ethkmd --config integration/hath-1.json" Enter
-sleep 1
-tmux send-keys -t 4 "stack runhaskell app/Main.hs -- notarise ethkmd --config integration/hath-2.json" Enter
-sleep 1
-tmux send-keys -t 5 "stack runhaskell app/Main.hs -- notarise ethkmd --config integration/hath-3.json" Enter
+tmux send-keys -t 3 "$hath -- notarise seed" Enter
+tmux send-keys -t 1 "$hath -- notarise ethkmd --config integration/hath-0.json" Enter
+tmux send-keys -t 2 "$hath -- notarise ethkmd --config integration/hath-1.json" Enter
+tmux send-keys -t 4 "$hath -- notarise ethkmd --config integration/hath-2.json" Enter
+tmux send-keys -t 5 "$hath -- notarise ethkmd --config integration/hath-3.json" Enter
 
 tmux select-pane -t 0
 
