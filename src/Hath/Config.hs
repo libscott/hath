@@ -18,12 +18,12 @@ import           System.Directory
 
 
 loadJsonConfig :: FromJSON a => String -> Hath r a
-loadJsonConfig name = do
-  traceE ("Loading config: " ++ name) $ do
+loadJsonConfig path = do
+  traceE ("Loading config: " ++ path) $ do
     jsonPath <- liftIO $ do
-      configPath <- getAppUserDataDirectory "hath"
-      createDirectoryIfMissing False configPath
-      pure $ configPath ++ "/" ++ name ++ ".json"
+      case path of
+        ('~':xs) -> (++xs) <$> getHomeDirectory
+        _        -> pure path
     logInfo $ "Loading config: " ++ jsonPath
     Just bs <- liftIO $ runResourceT $ runConduit $ sourceFile jsonPath .| await
     either error pure $ eitherDecodeStrict bs

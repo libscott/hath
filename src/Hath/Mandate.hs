@@ -24,23 +24,32 @@ data Mandate = Mandate
   { getAddress :: Address
   , getMe :: Ident
   , getChainId :: Integer
+  , getAppKey :: Bytes 32
   , getProc :: AgreementProcess
   }
 
 instance Has AgreementProcess Mandate where
   has = getProc
 
+loadMandate :: Has GethConfig r => Bytes 32 -> Value -> Maybe Address -> Hath r Mandate
+loadMandate (Bytes appKey) allConf maddr =
+  traceE "loadMandate" $ do
+
+    let s = fromString $ asString $ "{secret," <> appKey <> "}"
+        (Hex sk, conf) = allConf .! s
+
+    proc <- liftIO $ uncurry spawnAgree $ conf .! "{seed,port}"
+
+    pure $ Mandate (maybe (conf .! "{addr}") id maddr)
+                   (either error id $ loadSecret sk)
+                   (conf .! "{ethChainId}")
+                   (Bytes appKey)
+                   (proc)
+
 mandateGetMembers :: (Has Mandate r, Has GethConfig r) => Hath r (Int, [Address])
 mandateGetMembers = do
   addr <- asks $ getAddress . has
   unABI <$> readCall addr (abi "getMembers()" ())
-
-loadMandate :: Has GethConfig r => Ident -> Address -> Integer -> Hath r Mandate
-loadMandate me mandateAddr chainId =
-  traceE "loadMandate" $ do
-    proc <- liftIO $ spawnAgree
-    logInfo $ "Loaded mandate at addr: " ++ show mandateAddr
-    pure $ Mandate mandateAddr me chainId proc
 
 mandateGetState :: (Has Mandate r, Has GethConfig r, GetABI a) => Bytes 32 -> Hath r a
 mandateGetState key = do

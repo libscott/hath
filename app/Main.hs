@@ -40,24 +40,24 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
     infoH m = info $ m <**> helper
 
     topMethods = subparser $
-           (command "tx"       $ infoH txMethods         $ progDesc "tx methods")
-        <> (command "keyPair"  $ infoH keyPairMethod     $ progDesc "generate a priv/pub key pair")
-        <> (command "contract" $ infoH contractMethods   $ progDesc "generate contracts")
-        <> (command "notarise" $ infoH notariserMethods  $ progDesc "notariser modes")
+           (command "tx"       $ infoH txMethods         $ progDesc "Tx methods")
+        <> (command "keyPair"  $ infoH keyPairMethod     $ progDesc "Generate a priv/pub key pair")
+        <> (command "contract" $ infoH contractMethods   $ progDesc "Generate contracts")
+        <> (command "notarise" $ infoH notariserMethods  $ progDesc "Notariser modes")
 
     txMethods = subparser $
-           (command "encode"    $ infoH encodeTxMethod    $ progDesc "encode a json transaction")
-        <> (command "sign"      $ infoH signTxMethod      $ progDesc "sign a transaction on stdin")
-        <> (command "decode"    $ infoH decodeTxMethod    $ progDesc "decode a transaction on stdin")
-        <> (command "from"      $ infoH recoverFromMethod $ progDesc "recover address")
-        <> (command "txid"      $ infoH txidMethod        $ progDesc "get transaction id")
+           (command "encode"    $ infoH encodeTxMethod    $ progDesc "Encode a json transaction")
+        <> (command "sign"      $ infoH signTxMethod      $ progDesc "Sign a transaction on stdin")
+        <> (command "decode"    $ infoH decodeTxMethod    $ progDesc "Decode a transaction on stdin")
+        <> (command "from"      $ infoH recoverFromMethod $ progDesc "Recover address")
+        <> (command "txid"      $ infoH txidMethod        $ progDesc "Get transaction id")
 
     contractMethods = subparser $
-           (command "contractProxy" $ infoH contractProxyMethod $ progDesc "get code for proxy contract")
+           (command "contractProxy" $ infoH contractProxyMethod $ progDesc "Get code for proxy contract")
 
     notariserMethods = subparser $
-           (command "ethkmd" $ infoH runEthNotariserMethod  $ progDesc "run ETH -> KMD notariser")
-        <> (command "seed"   $ infoH runSeedNotariserMethod $ progDesc "run notariser seed node")
+           (command "ethkmd" $ infoH runEthNotariserMethod  $ progDesc "Run ETH -> KMD notariser")
+        <> (command "seed"   $ infoH runSeedNotariserMethod $ progDesc "Run notariser seed node")
 
 
 jsonMethod :: IO Value -> Method
@@ -129,10 +129,19 @@ contractProxyMethod = act <$> optInit <*> argAddress
 
 
 runEthNotariserMethod :: Parser Method
-runEthNotariserMethod = act <$> optional optAddress
+runEthNotariserMethod =
+  runEthNotariser <$> optional optAddress <*> optConfig
   where
-    optAddress = option auto (long "mandate" <> metavar "[mandate address]")
-    act addr = ethNotariser addr >>= either error pure
+    optAddress = option auto
+                 ( short 'm'
+                <> long "mandate"
+                <> help "Mandate contract address 0x..." )
+    optConfig = strOption
+                ( short 'c'
+               <> long "config"
+               <> help "Path to hath.json"
+               <> value "~/.hath/hath.json"
+               <> showDefault )
 
 runSeedNotariserMethod :: Parser Method
 runSeedNotariserMethod = pure runSeed

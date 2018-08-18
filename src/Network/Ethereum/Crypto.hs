@@ -9,7 +9,6 @@ module Network.Ethereum.Crypto
   , pubKeyAddr
   , genSecKey
   , loadSecret
-  , nullAddress
   , sign
   , recover
   , recoverAddr
@@ -30,6 +29,7 @@ import           Data.Binary
 import           Data.Monoid
 import qualified Data.Text as T
 
+import           Network.Ethereum.Crypto.Address as ALL
 import           Network.Ethereum.Crypto.Hash as ALL
 import           Network.Ethereum.Crypto.TrieHash as ALL
 import           Network.Ethereum.Data.ABI
@@ -40,40 +40,6 @@ import           Hath.Prelude
 
 import           System.Entropy
 
-
-newtype Address = Address { fromAddress :: ByteString }
-  deriving (Eq, Ord)
-
-instance Show Address where
-  show (Address bs) = "0x" <> BS8.unpack (B16.encode bs)
-
-instance Read Address where
-  readsPrec p s =
-    if length s == 42 && take 2 s == "0x"
-       then let (a,b) = B16.decode $ fromString $ drop 2 s
-             in [(Address a, BS8.unpack b)]
-       else []
-
-instance IsString Address where
-  fromString = read
-
-instance FromJSON Address where
-  parseJSON val = do
-    Hex bs <- parseJSON val
-    if BS.length bs == 20 then pure $ Address bs
-                          else fail "Invalid Address"
-
-instance ToJSON Address where
-  toJSON (Address bs) = toJSON $ Hex bs
-
-nullAddress :: Address
-nullAddress = "0x0000000000000000000000000000000000000000"
-
-instance PutABI Address where
-  putABI (Address bs) = putABI $ (bytes $ BS.replicate 12 0 <> bs :: Bytes 32)
-
-instance GetABI Address where
-  getABI = Address . BS.drop 12 <$> takeN 32
 
 -- Orphan instance for CompactRecSig
 instance ToJSON CompactRecSig where

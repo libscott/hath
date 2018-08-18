@@ -61,29 +61,20 @@ instance Has BitcoinConfig EthNotariser where
 instance Has Mandate EthNotariser where
   has = getMandate
 
-runEthNotariser :: Maybe Address -> Hath EthNotariser a -> IO a
-runEthNotariser maddress act = do
+runEthNotariser :: Maybe Address -> String -> IO ()
+runEthNotariser maddress confPath = do
   liftIO $ initKomodo
   let gethConfig = GethConfig "http://localhost:8545"
   runHath gethConfig $ do
-
-    -- load config
-    conf <- loadJsonConfig "hath"
-
-    -- load mandate
-    let (Hex sk, (mandateAddr0, chainId)) = conf .! "{secret,mandates:{ETHKMD:{addr,ethChainId}}}"
-    ident <- either error pure $ loadSecret sk
-    let mandateAddr = maybe mandateAddr0 id maddress
-
-    mandate <- loadMandate ident mandateAddr chainId
-
+    conf <- loadJsonConfig confPath
+    mandate <- loadMandate ethKmd conf maddress
     bitcoinConf <- loadBitcoinConfig "~/.komodo/komodo.conf"
-    let ccId = conf .! "{mandates:{ETHKMD:{ccId}}}"
+    let ccId = conf .! "{ETHKMD:{ccId}}"
     let config = EthNotariser bitcoinConf gethConfig mandate ccId
-    hathReader (const config) act
+    hathReader (const config) ethNotariser
 
-ethNotariser :: Maybe Address -> IO a
-ethNotariser maddress = runEthNotariser maddress $
+ethNotariser :: Hath EthNotariser ()
+ethNotariser = do
   forever $ do
     lastState <- mandateGetState ethKmd
     let lastHeight = maybe 0 id $ lastState .? "{lastHeight}"

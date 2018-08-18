@@ -7,7 +7,7 @@ module Network.Ethereum.Data.ABI
   ( ABI(..)
   , PutABI(..)
   , GetABI(..)
-  , Bytes
+  , Bytes(..)
   , bytes
   , abi
   , encodeABI

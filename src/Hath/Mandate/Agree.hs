@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Hath.Mandate.Agree where
 
 import           Control.Monad
@@ -33,12 +35,11 @@ data AgreementProcess = AgreementProcess
   , apHandoff :: MVar (Process ())
   }
 
-spawnAgree :: IO AgreementProcess
-spawnAgree = do
+spawnAgree :: String -> String -> IO AgreementProcess
+spawnAgree seed port = do
   let host = "localhost"
-      port = "18088"
       ext = const (host, port)
-      seeds = [P2P.makeNodeId "localhost:18089"]
+      seeds = [P2P.makeNodeId seed]
 
   handoff <- newEmptyMVar
 
