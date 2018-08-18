@@ -72,30 +72,38 @@ agreeCollectSigs message myBallot members = do
       (Ballot myAddress mySig myData) = myBallot
 
   startTime <- liftIO $ getCurrentTime
+  let timeoutMs = 30000000 -- 30s
+      sendMine = P2P.nsendPeers topic (mySig, SerBinary myData)
 
   let f sigs | Map.size sigs == length members = pure sigs
       f sigs = do
-        t <- diffUTCTime <$> liftIO getCurrentTime <*> pure startTime
-        let ms = round $ realToFrac t * 1000
-        mTheirSig <- expectTimeout ms
+        t <- diffUTCTime startTime <$> liftIO getCurrentTime
+        let ms = round $ (realToFrac t) * 1000000 + timeoutMs
+        say $ "μs: " ++ show ms
+        mTheirSig <- expectTimeout $ max ms 0
         
         case mTheirSig of
+             Nothing -> pure sigs -- Timeout
              Just (theirSig, SerBinary obj) ->
                case recoverAddr message theirSig of
-                    Just addr ->
-                      if elem addr members
-                         then f $ Map.insert addr (Ballot addr theirSig obj) sigs
-                         else do
-                           say $ "Not member: " ++ show addr
-                           f sigs
                     Nothing -> do
                       say "Signature recovery failed"
                       f sigs
-             Nothing -> pure sigs -- Timeout
+                    Just addr ->
+                      if elem addr members
+                         then do
+                           say $ "Got sig from peer: " ++ show addr
+                           when (not $ Map.member addr sigs) sendMine
+                           f $ Map.insert addr (Ballot addr theirSig obj) sigs
+                         else do
+                           say $ "Not member: " ++ show addr
+                           f sigs
 
   runAgree $ do
+    liftIO $ threadDelay 500000
     getSelfPid >>= register topic
-    P2P.nsendPeers topic (mySig, SerBinary myData)
+    liftIO $ threadDelay 500000
+    sendMine
     out <- f $ Map.singleton myAddress myBallot
     unregister topic
     pure $ snd <$> Map.toList out

@@ -8,7 +8,7 @@ import Hath.Prelude
 
 mandateAddr :: Address
 mandateAddr = "0xcfeb869f69431e42cdb54a4f4f105c19c080a601"
-seed = "localhost:18100" :: String
+seed = "localhost:18089" :: String
 portStart = 18100        :: Int
 ethChainId = 15778       :: Int
 ccId = 65111             :: Int

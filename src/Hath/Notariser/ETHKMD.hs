@@ -63,6 +63,7 @@ instance Has Mandate EthNotariser where
 
 runEthNotariser :: Maybe Address -> String -> IO ()
 runEthNotariser maddress confPath = do
+  threadDelay 2000000
   liftIO $ initKomodo
   let gethConfig = GethConfig "http://localhost:8545"
   runHath gethConfig $ do
