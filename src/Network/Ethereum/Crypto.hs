@@ -10,6 +10,7 @@ module Network.Ethereum.Crypto
   , genSecKey
   , loadSecret
   , nullAddress
+  , sign
   , recover
   , recoverAddr
   , toMsg
@@ -31,6 +32,7 @@ import qualified Data.Text as T
 
 import           Network.Ethereum.Crypto.Hash as ALL
 import           Network.Ethereum.Crypto.TrieHash as ALL
+import           Network.Ethereum.Data.ABI
 import           Network.Ethereum.Data.Hex
 import           Network.Ethereum.Data.RLP
 import           Hath.Data.Aeson
@@ -66,6 +68,12 @@ instance ToJSON Address where
 
 nullAddress :: Address
 nullAddress = "0x0000000000000000000000000000000000000000"
+
+instance PutABI Address where
+  putABI (Address bs) = putABI $ (bytes $ BS.replicate 12 0 <> bs :: Bytes 32)
+
+instance GetABI Address where
+  getABI = Address . BS.drop 12 <$> takeN 32
 
 -- Orphan instance for CompactRecSig
 instance ToJSON CompactRecSig where
@@ -118,3 +126,6 @@ recover rs message =
 
 toMsg :: ByteString -> Msg
 toMsg = fromJust . msg . sha3'
+
+sign :: SecKey -> Msg -> CompactRecSig
+sign sk = exportCompactRecSig . signRecMsg sk

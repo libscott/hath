@@ -5,6 +5,7 @@ module TestABI where
 import qualified Data.ByteString as BS
 import           Data.Either
 import           Network.Ethereum.Data
+import           Network.Ethereum.Crypto
 
 import           Hath.Prelude
 
@@ -71,6 +72,10 @@ randoms = testGroup "randomers"
           ("0000000000000000000000000000000000000000000000000000000000000020" <>
            "0000000000000000000000000000000000000000000000000000000000000000"
           )
+
+  , testCase "Address" $
+      iso (nullAddress)
+          ("0000000000000000000000000000000000000000000000000000000000000000")
   ]
 
 

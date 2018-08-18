@@ -124,11 +124,6 @@ doKmdNotarisation blocks utxo = do
   ident@(_, myAddr) <- getBitcoinIdent
   opRet <- getNotarisationOpReturn blocks <$> asks getCCId
   
-  -- Collect sigs
-  -- Topic hash is the opret
-  -- campaign for sigs on the opret then make selection
-
-
   let message = toMsg opRet
   results <- campaign (toMsg opRet) (myAddr, getOutPoint utxo)
   (r, _) <- mandateGetMembers

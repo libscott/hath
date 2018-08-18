@@ -58,7 +58,9 @@ mandateGetNonce key = do
     unABI <$> readCall address (abi "getNonce(bytes32)" key)
 
 mandateIncNonce :: (Has Mandate r, Has GethConfig r) => Bytes 32 -> Hath r ()
-mandateIncNonce key = mandateProxy key nullAddress "" >> pure ()
+mandateIncNonce key = do
+  logInfo "mandateIncNonce"
+  mandateProxy key nullAddress "" >> pure ()
 
 data AgreeFail = AgreeFail deriving (Show)
 instance Exception AgreeFail
@@ -83,10 +85,11 @@ mandateProxy key target forwardCall = do
   postTransactionSync tx
 
 ethMsg :: PutABI a => a -> Msg
-ethMsg a = toMsg $ "\x19\&Ethereum Signed Message:\n32" <> abi "" a
+ethMsg a = toMsg $ "\x19\&Ethereum Signed Message:\n32" <> sha3' (abi "" a)
 
 mandateSetState :: (Has Mandate r, Has GethConfig r, PutABI a) => Bytes 32 -> a -> Hath r ()
 mandateSetState key val = do
+  logInfo "mandateSetState"
   address <- asks $ getAddress . has
   let forwardCall = abi "setState(bytes32,string)" (key, val)
   out <- mandateProxy key address forwardCall
@@ -104,10 +107,11 @@ exportMultisigABI sigs =
 campaign :: (Has Mandate r, Has GethConfig r, Serialize a, Typeable a) => Msg -> a -> Hath r [Ballot a]
 campaign message myData = do
   logInfo "Collecting sigs..."
-  (sk,myAddr) <- asks $ getMe . has
-  (_, m) <- mandateGetMembers
-  let crs = exportCompactRecSig $ signRecMsg sk message
-  hathReader (getProc . has) $ agreeCollectSigs message (Ballot myAddr crs myData) m
+  (sk, myAddr) <- asks $ getMe . has
+  (_, members) <- mandateGetMembers
+  let crs = sign sk message
+      act = agreeCollectSigs message (Ballot myAddr crs myData) members
+  hathReader (getProc . has) act
 
 makeTransaction :: (Has GethConfig r, Has Mandate r) => Address -> ByteString -> Hath r Transaction
 makeTransaction dest callData = do

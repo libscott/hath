@@ -15,9 +15,12 @@ module Network.Ethereum.Data.ABI
   , takeN
   ) where
 
+import           Crypto.Hash
+
 import           Control.Monad.Except
 import           Control.Monad.State
 
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import           Data.Proxy
@@ -26,7 +29,6 @@ import           GHC.TypeLits
 
 import           Network.Ethereum.Data.Hex
 import           Network.Ethereum.Data.RLP
-import           Network.Ethereum.Crypto
 import           Hath.Data.Aeson
 import           Hath.Prelude
 
@@ -81,9 +83,6 @@ instance PutABI ByteString where
   putABI bs =
     let bs' = if bs == "" then "" else bytesPad bs False
      in putDynamic (BS.length bs) 0 $ putData bs'
-
-instance PutABI Address where
-  putABI (Address bs) = putData $ bytesPad bs True
 
 instance PutABI () where
   fixedLen () = 0
@@ -179,9 +178,6 @@ instance forall n. KnownNat n => GetABI (Bytes n) where
     let n = bytesGetN (Proxy :: Proxy n)
     pure $ bytes $ BS.take n bs
 
-instance GetABI Address where
-  getABI = Address . BS.drop 12 <$> takeN 32
-
 instance GetABI a => GetABI [a] where
   getABI =
     getDynamic $ do
@@ -242,7 +238,9 @@ instance GetABI a => FromJSON (ABI a) where
 -- Utilities ------------------------------------------------------------------
 --
 abiMethod :: String -> BL.ByteString
-abiMethod = BL.fromStrict . BS.take 4 . sha3' . fromString
+abiMethod =
+  let sha3' bs = hash (bs :: ByteString) :: Digest Keccak_256
+   in BL.pack . take 4 . BA.unpack . sha3' . fromString
 
 bytesPad :: ByteString -> Bool -> BL.ByteString
 bytesPad bs rev = do
