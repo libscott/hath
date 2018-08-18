@@ -1,0 +1,8 @@
+image: fpco/stack-build:lts-10.5
+
+pipelines:
+  default:
+    - step:
+        script:
+          - stack build --test --no-run-tests
+          - stack test
