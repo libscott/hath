@@ -127,18 +127,19 @@ instance Ser.Serialize a => Binary (SerBinary a) where
     either fail (pure . SerBinary) $ Ser.decode bs
 
 
+type Inventory a = Map Address (CompactRecSig, a)
+
 data RoundMsg a =
-    JoinRound ProcessId a
-  | InventoryIndex ProcessId Integer
+    InventoryIndex ProcessId Integer
   | GetInventory ProcessId Integer
-  | InventoryData (Map Address a)
+  | InventoryData (Inventory a)
   deriving (Generic)
 
 instance Binary a => Binary (RoundMsg a)
 
 data Round a = Round
   { topic :: String
-  , mInv :: MVar (Map Address a)
+  , mInv :: MVar (Inventory a)
   , members :: [Address]
   , parent :: ProcessId
   }
@@ -152,14 +153,14 @@ repeatExpect usTimeout act = do
     when (us > 0) $
        expectTimeout us >>= maybe (pure ()) (\a -> act a >> f)
 
-doRound :: forall a. Serializable a =>
-           Msg -> a -> [Address] -> Process [(Address, a)]
-doRound message myObj members = do
+doRound :: forall a. Serializable a => Msg -> Ballot a -> [Address] -> Process [Ballot a]
+doRound message myBallot members = do
   let topic = asString $ getMsg message
+      (Ballot myAddr mySig myObj) = myBallot
 
-  mInv <- liftIO $ newMVar Map.empty
+  let startInventory = Map.fromList [(myAddr, (mySig, myObj))]
+  mInv <- liftIO $ newMVar startInventory
   myPid <- getSelfPid
-  register topic myPid
   let round = Round topic mInv members myPid
 
   invBuilder <- spawnLocal $ do
@@ -167,10 +168,6 @@ doRound message myObj members = do
 
   let handleMsg addr theirSig =
         \case
-          (JoinRound peer obj) -> do
-            idx <- inventoryIndex members <$> liftIO (readMVar mInv)
-            send peer (InventoryIndex myPid idx :: RoundMsg a)
-            liftIO $ modifyMVar_ mInv $ pure . Map.insert addr obj
           (InventoryIndex peer idx) -> do
             send invBuilder (peer, idx)
           (GetInventory peer idx) -> do
@@ -181,7 +178,9 @@ doRound message myObj members = do
             -- TODO: authenticate
             liftIO $ modifyMVar_ mInv $ pure . Map.union inv
 
-  P2P.nsendPeers topic $ JoinRound myPid myObj
+  
+  register topic myPid
+  P2P.nsendPeers topic $ InventoryData startInventory
 
   repeatExpect (10 * 1000000) $
     \(theirSig, obj) -> do
@@ -192,11 +191,12 @@ doRound message myObj members = do
                   say $ "Got sig from peer: " ++ show addr
                   handleMsg addr theirSig (obj :: RoundMsg a)
                 else do
-                  say $ "Not member: " ++ show addr
+                  say $ "Not member or wrong round: " ++ show addr
            Nothing -> do
              say "Signature recovery failed"
 
-  liftIO $ Map.toList <$> takeMVar mInv
+  r <- Map.toAscList <$> liftIO (takeMVar mInv)
+  pure $ [Ballot a s o | (a, (s, o)) <- r]
 
 buildInventory :: forall a. Serializable a => Round a -> Process ()
 buildInventory round@Round{..} =
@@ -237,7 +237,7 @@ dedupeInventoryQueries = f 0
         f _ [] = []
 
 -- Get part of the inventory according to an index
-getInventorySubset :: Integer -> [Address] -> Map Address a -> Map Address a
+getInventorySubset :: Integer -> [Address] -> Inventory a -> Inventory a
 getInventorySubset idx members =
   Map.filterWithKey $
     \k _ -> let Just i = elemIndex k members
