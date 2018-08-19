@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -e
+
+stack build --fast
 
 tmux split-window -h \; split-window -h \; select-layout even-horizontal
 

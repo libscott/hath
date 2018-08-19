@@ -8,11 +8,13 @@
 module Hath.Mandate.Round
   ( AgreementProcess(..)
   , Ballot(..)
-  , agreeCollectSigs
   , spawnAgree
   , inventoryIndex
   , prioritiseRemoteInventory
   , dedupeInventoryQueries
+  , runAgree
+  , doRound
+  , runSeed
   ) where
 
 import           Control.Monad
@@ -28,7 +30,6 @@ import           Data.Bits
 import qualified Data.Serialize as Ser
 import qualified Data.Map as Map
 import           Data.Time.Clock
-import           Data.Typeable
 
 import           GHC.Generics (Generic)
 
@@ -74,66 +75,14 @@ data Ballot a = Ballot
   , bData :: a
   } deriving (Show)
 
-
-agreeCollectSigs :: (Ser.Serialize a, Typeable a) => Msg -> Ballot a -> [Address] ->
-                    Hath AgreementProcess [Ballot a]
-agreeCollectSigs message myBallot members = do
-  let topic = asString $ getMsg message
-      (Ballot myAddress mySig myData) = myBallot
-
-  startTime <- liftIO $ getCurrentTime
-  let timeoutMs = 30000000 -- 30s
-      sendMine = P2P.nsendPeers topic (mySig, SerBinary myData)
-
-  let f sigs | Map.size sigs == length members = pure sigs
-      f sigs = do
-        t <- diffUTCTime startTime <$> liftIO getCurrentTime
-        let ms = round $ (realToFrac t) * 1000000 + timeoutMs
-        say $ "μs: " ++ show ms
-        mTheirSig <- expectTimeout $ max ms 0
-        
-        case mTheirSig of
-             Nothing -> pure sigs -- Timeout
-             Just (theirSig, SerBinary obj) ->
-               case recoverAddr message theirSig of
-                    Just addr ->
-                      if elem addr members
-                         then do
-                           say $ "Got sig from peer: " ++ show addr
-                           when (not $ Map.member addr sigs) sendMine
-                           f $ Map.insert addr (Ballot addr theirSig obj) sigs
-                         else do
-                           say $ "Not member: " ++ show addr
-                           f sigs
-                    Nothing -> do
-                      say "Signature recovery failed"
-                      f sigs
-
-  runAgree $ do
-    getSelfPid >>= register topic
-    sendMine
-    out <- f $ Map.singleton myAddress myBallot
-    unregister topic
-    pure $ snd <$> Map.toList out
-
-
-newtype SerBinary a = SerBinary { unSerBinary :: a }
-  deriving (Typeable)
-
-instance Ser.Serialize a => Binary (SerBinary a) where
-  put = put . Ser.encode . unSerBinary
-  get = do
-    bs <- get
-    either fail (pure . SerBinary) $ Ser.decode bs
-
-
 type Inventory a = Map Address (CompactRecSig, a)
 
 data RoundMsg a =
-    InventoryIndex ProcessId Integer
+    JoinRound ProcessId (Inventory a)
+  | InventoryIndex ProcessId Integer
   | GetInventory ProcessId Integer
   | InventoryData (Inventory a)
-  deriving (Generic)
+  deriving (Show, Generic)
 
 instance Binary a => Binary (RoundMsg a)
 
@@ -142,18 +91,19 @@ data Round a = Round
   , mInv :: MVar (Inventory a)
   , members :: [Address]
   , parent :: ProcessId
+  , mySend :: (ProcessId -> RoundMsg a -> Process ())
   }
 
-repeatExpect :: Serializable a => Int -> (a -> Process ()) -> Process ()
-repeatExpect usTimeout act = do
+repeatMatch :: Int -> [Match ()] -> Process ()
+repeatMatch usTimeout matches = do
   startTime <- liftIO $ getCurrentTime
   fix $ \f -> do
     t <- diffUTCTime startTime <$> liftIO getCurrentTime
     let us = max 0 $ round $ (realToFrac t) * 1000000 + fromIntegral usTimeout
     when (us > 0) $
-       expectTimeout us >>= maybe (pure ()) (\a -> act a >> f)
+       receiveTimeout us matches >>= maybe (pure ()) (\() -> f)
 
-doRound :: forall a. Serializable a => Msg -> Ballot a -> [Address] -> Process [Ballot a]
+doRound :: forall a. (Serializable a, Show a) => Msg -> Ballot a -> [Address] -> Process [Ballot a]
 doRound message myBallot members = do
   let topic = asString $ getMsg message
       (Ballot myAddr mySig myObj) = myBallot
@@ -161,39 +111,57 @@ doRound message myBallot members = do
   let startInventory = Map.fromList [(myAddr, (mySig, myObj))]
   mInv <- liftIO $ newMVar startInventory
   myPid <- getSelfPid
-  let round = Round topic mInv members myPid
+  let mySend peer a = send peer ((mySig, a) :: (CompactRecSig, RoundMsg a))
+  let round = Round topic mInv members myPid mySend
 
   invBuilder <- spawnLocal $ do
     link myPid >> buildInventory round
 
-  let handleMsg addr theirSig =
+  let handleMsg addr =
         \case
-          (InventoryIndex peer idx) -> do
-            send invBuilder (peer, idx)
+          (InventoryIndex peer theirIdx) -> do
+            send invBuilder (peer, theirIdx)
           (GetInventory peer idx) -> do
             inv <- liftIO $ readMVar mInv
             let idx = inventoryIndex members inv
-            send peer (InventoryData $ getInventorySubset idx members inv :: RoundMsg a)
+            let subset = getInventorySubset idx members inv
+            mySend peer $ InventoryData subset
           (InventoryData inv) -> do
             -- TODO: authenticate
             liftIO $ modifyMVar_ mInv $ pure . Map.union inv
+            
+            -- TODO: Make sure we are adding something new before
+            -- broadcasting
+            inv <- liftIO $ readMVar mInv
+            let idx = inventoryIndex members inv
+            P2P.nsendPeers topic (mySig, (InventoryIndex myPid idx :: RoundMsg a))
+            say $ "My inventory: " ++ show idx
 
   
+  -- The only thing we use the p2p library for is to bootstrap
+  -- the peer list and send a message to all peers based on a topic.
+  -- Which is already quite useful really.
+  register P2P.peerListenerService myPid
   register topic myPid
-  P2P.nsendPeers topic $ InventoryData startInventory
+  P2P.nsendPeers topic (mySig, InventoryData startInventory)
 
-  repeatExpect (10 * 1000000) $
-    \(theirSig, obj) -> do
-      case recoverAddr message theirSig of
-           Just addr ->
-             if elem addr members
-                then do
-                  say $ "Got sig from peer: " ++ show addr
-                  handleMsg addr theirSig (obj :: RoundMsg a)
-                else do
-                  say $ "Not member or wrong round: " ++ show addr
-           Nothing -> do
-             say "Signature recovery failed"
+  let onRoundMsg (theirSig, obj) = do
+        case recoverAddr message theirSig of
+             Just addr ->
+               if elem addr members
+                  then do
+                    handleMsg addr (obj :: RoundMsg a)
+                  else do
+                    say $ "Not member or wrong round: " ++ show addr
+             Nothing -> do
+               say "Signature recovery failed"
+
+  let onNewPeer (P2P.NewPeer nodeId) = do
+        inv <- liftIO $ readMVar mInv
+        let idx = inventoryIndex members inv
+        nsendRemote nodeId topic (mySig, (InventoryIndex myPid idx :: RoundMsg a))
+
+  repeatMatch (5 * 1000000) [match onRoundMsg, match onNewPeer]
 
   r <- Map.toAscList <$> liftIO (takeMVar mInv)
   pure $ [Ballot a s o | (a, (s, o)) <- r]
@@ -206,7 +174,7 @@ buildInventory round@Round{..} =
     ordered <- prioritiseRemoteInventory members <$> liftIO (readMVar mInv) <*> pure idxs
     let queries = dedupeInventoryQueries ordered
     forM_ queries $ \(peer, wanted) -> do
-      send peer (GetInventory parent wanted :: RoundMsg a)
+      mySend peer $ GetInventory parent wanted
 
     -- Stage 2: Take a nap
     liftIO $ threadDelay $ 500 * 1000

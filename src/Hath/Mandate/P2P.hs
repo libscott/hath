@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, RecordWildCards, MonoLocalBinds #-}
+{-# LANGUAGE OverloadedStrings, RecordWildCards, MonoLocalBinds, DeriveGeneric #-}
 
 -- Kindly borrowed from: http://hackage.haskell.org/package/distributed-process-p2p
 --
@@ -24,7 +24,9 @@ module Hath.Mandate.P2P (
     nsendPeers,
     nsendCapable,
     createLocalNode,
-    peerController
+    peerController,
+    peerListenerService,
+    NewPeer(..)
 ) where
 
 import Control.Distributed.Process                as DP
@@ -45,6 +47,8 @@ import Data.Maybe (isJust)
 
 import Data.Binary
 import Data.Typeable
+
+import GHC.Generics (Generic)
 
 -- * Peer-to-peer API
 
@@ -100,6 +104,9 @@ createLocalNode host port mkExternal rTable = do
 peerControllerService :: String
 peerControllerService = "P2P:Controller"
 
+peerListenerService :: String
+peerListenerService = "P2P::Listener"
+
 -- | A P2P controller service process.
 peerController :: [NodeId] -> Process ()
 peerController seeds = do
@@ -119,10 +126,16 @@ peerController seeds = do
 
 -- ** Discovery
 
+-- Goes from a node to a process
 doDiscover :: NodeId -> Process ()
 doDiscover node = do
     maySay $ "Examining node: " ++ show node
     whereisRemoteAsync node peerControllerService
+
+data NewPeer = NewPeer NodeId
+  deriving (Generic)
+
+instance Binary NewPeer
 
 doRegister :: PeerState -> ProcessId -> Process ()
 doRegister (PeerState{..}) pid = do
@@ -136,6 +149,7 @@ doRegister (PeerState{..}) pid = do
             liftIO $ putMVar p2pPeers (S.insert pid pids)
             maySay $ "New node: " ++ show pid
             doDiscover $ processNodeId pid
+            nsend peerListenerService $ NewPeer $ processNodeId pid
 
 doUnregister :: PeerState -> Maybe MonitorRef -> ProcessId -> Process ()
 doUnregister PeerState{..} mref pid = do

@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DataKinds #-}
 
 module Network.Ethereum.Crypto.Hash
   ( Sha3(..)
@@ -13,6 +14,7 @@ import           Data.Aeson
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
 
+import           Network.Ethereum.Data.ABI
 import           Network.Ethereum.Data.Hex
 import           Network.Ethereum.Data.RLP
 import           Hath.Prelude
@@ -39,6 +41,9 @@ instance FromJSON Sha3 where
     if BS.length bs == 32
        then pure $ Sha3 bs
        else fail "malformed hash"
+
+instance PutABI Sha3 where
+  putABI (Sha3 bs) = putABI (bytes bs :: Bytes 32)
 
 sha3' :: ByteString -> ByteString
 sha3' bs = BS.pack (BA.unpack (hash bs :: Digest Keccak_256))

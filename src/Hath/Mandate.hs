@@ -2,8 +2,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Hath.Mandate where
+
+import           Control.Distributed.Process.Serializable (Serializable)
 
 import qualified Data.ByteString as BS
 import           Data.Serialize
@@ -17,19 +21,10 @@ import           Network.Ethereum.Transaction
 import           Hath.Data.Aeson
 import           Hath.Monad
 import           Hath.Prelude
+import           Hath.Mandate.Consensus
 import           Hath.Mandate.Round
+import           Hath.Mandate.Types
 
-
-data Mandate = Mandate
-  { getAddress :: Address
-  , getMe :: Ident
-  , getChainId :: Integer
-  , getAppKey :: Bytes 32
-  , getProc :: AgreementProcess
-  }
-
-instance Has AgreementProcess Mandate where
-  has = getProc
 
 loadMandate :: Has GethConfig r => Bytes 32 -> Value -> Maybe Address -> Hath r Mandate
 loadMandate (Bytes appKey) allConf maddr =
@@ -45,11 +40,6 @@ loadMandate (Bytes appKey) allConf maddr =
                    (conf .! "{ethChainId}")
                    (Bytes appKey)
                    (proc)
-
-mandateGetMembers :: (Has Mandate r, Has GethConfig r) => Hath r (Int, [Address])
-mandateGetMembers = do
-  addr <- asks $ getAddress . has
-  unABI <$> readCall addr (abi "getMembers()" ())
 
 mandateGetState :: (Has Mandate r, Has GethConfig r, GetABI a) => Bytes 32 -> Hath r a
 mandateGetState key = do
@@ -81,17 +71,24 @@ mandateProxy key target forwardCall = do
   nonce <- fst <$> mandateGetNonce key
 
   let toSign = ethMsg (target, forwardCall, key, nonce)
-  results <- campaign toSign ()
-  requiredSigs <- fst <$> mandateGetMembers
-  when (length results < requiredSigs) (throw AgreeFail)
+  
+  (sigs, sender) <- agreeTx toSign >>=
+    \case Nothing -> throw AgreeFail
+          Just r -> pure r
 
-  let sigData = exportMultisigABI $ bSig <$> results
+  let sigData = exportMultisigABI $ sigs
       proxyMethod = "proxy(address,bytes,bytes32,uint256,bytes32[],bytes32[],bytes)"
       callArgs = (target, (forwardCall, (key, (nonce, sigData))))
       callData = abi proxyMethod callArgs
 
-  tx <- makeTransaction address callData
-  postTransactionSync tx
+  myAddress <- asks $ snd . getMe . has
+  when (myAddress == sender) $ do
+    logInfo "I am the sender!"
+    tx <- makeTransaction address callData
+    --postTransactionSync tx
+    logInfo $ "Not posting transaction to mandateProxy!"
+
+  undefined
 
 ethMsg :: PutABI a => a -> Msg
 ethMsg a = toMsg $ "\x19\&Ethereum Signed Message:\n32" <> sha3' (abi "" a)
@@ -113,13 +110,13 @@ exportMultisigABI sigs =
       )
 
 -- Collect signatures and payloads from members
-campaign :: (Has Mandate r, Has GethConfig r, Serialize a, Typeable a) => Msg -> a -> Hath r [Ballot a]
+campaign :: (Has Mandate r, Has GethConfig r, Serializable a, Show a) => Msg -> a -> Hath r [Ballot a]
 campaign message myData = do
-  logInfo "Collecting sigs..."
+  logInfo $ "Topic is: " ++ show (toHex $ getMsg message)
   (sk, myAddr) <- asks $ getMe . has
   (_, members) <- mandateGetMembers
   let crs = sign sk message
-      act = agreeCollectSigs message (Ballot myAddr crs myData) members
+      act = runAgree $ doRound message (Ballot myAddr crs myData) members
   hathReader (getProc . has) act
 
 makeTransaction :: (Has GethConfig r, Has Mandate r) => Address -> ByteString -> Hath r Transaction
@@ -127,6 +124,7 @@ makeTransaction dest callData = do
   (sk,myAddress) <- asks $ getMe . has
   chainID <- asks $ getChainId . has
   U256 nonce <- queryEthereum "eth_getTransactionCount" [toJSON myAddress, "latest"]
+  logInfo $ "Transaction nonce: " ++ show nonce
   --U256 gasPrice <- queryEthereum "eth_gasPrice" []
   let gasPrice = 1
   ---U256 gas <- queryEthereum "eth_estimateGas" ["{to,data}" .% (dest,Hex callData)]

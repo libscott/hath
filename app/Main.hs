@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MonoLocalBinds #-}
 
 module Main where
 
@@ -17,7 +18,7 @@ import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Transaction
 
 import           Hath.Notariser.ETHKMD
-import           Hath.Mandate.Agree
+import           Hath.Mandate.Round
 import           Hath.Data.Aeson hiding (Parser)
 import           Hath.Monad
 import           Hath.Prelude

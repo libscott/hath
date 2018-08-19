@@ -22,8 +22,10 @@ import           Network.Komodo
 
 import           Hath.Config
 import           Hath.Data.Aeson
+import           Hath.Data.Binary
 import           Hath.Mandate
 import           Hath.Mandate.Round
+import           Hath.Mandate.Types
 import           Hath.Monad
 import           Hath.Prelude
 
@@ -111,13 +113,15 @@ notariseToKmd (from, to) = do
          blocks <- forM blockRange ethGetBlockByNumber
          doKmdNotarisation blocks unspent
 
+
 doKmdNotarisation :: [EthBlock] -> BitcoinUtxo -> Hath EthNotariser ()
 doKmdNotarisation blocks utxo = do
   ident@(_, myAddr) <- getBitcoinIdent
   opRet <- getNotarisationOpReturn blocks <$> asks getCCId
   
   let message = toMsg opRet
-  results <- campaign (toMsg opRet) (myAddr, getOutPoint utxo)
+  results' <- campaign (toMsg opRet) (Ser2Bin (myAddr, getOutPoint utxo))
+  let results = [Ballot a b (unSer2Bin c) | Ballot a b c <- results']
   (r, _) <- mandateGetMembers
   if length results >= r
      then do
