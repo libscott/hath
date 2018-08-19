@@ -11,7 +11,7 @@ module Hath.Prelude
 import Control.Applicative as ALL
 import Control.Concurrent as ALL (threadDelay)
 import Control.Exception as ALL
-import Control.Monad as ALL (forM, forM_, join, when, replicateM)
+import Control.Monad as ALL (forM, forM_, join, when, replicateM, foldM)
 import Control.Monad.IO.Class as ALL (liftIO)
 import Control.Monad.Reader as ALL (ask, asks)
 import Control.Monad.Trans.Class as ALL
@@ -20,7 +20,9 @@ import Data.ByteString as ALL (ByteString)
 import qualified Data.ByteString.Base16 as B16
 import Data.ByteString.Lazy as ALL (toStrict)
 import Data.ByteString.Short as ALL (toShort, fromShort)
+import Data.Function as ALL (fix)
 import Data.List as ALL (elemIndex, sort, sortOn)
+import Data.Map as ALL (Map)
 import Data.Maybe as ALL (catMaybes, fromJust, fromMaybe, mapMaybe, listToMaybe)
 import Data.Monoid as ALL
 import Data.Set as ALL (Set)
@@ -32,6 +34,8 @@ import Data.Word as ALL (Word8, Word16, Word32, Word64)
 import Network.Ethereum.Errors as ALL
 import Hath.Monad as ALL
 import Hath.Logging as ALL
+
+import Lens.Micro as ALL ((<&>))
 
 import Text.Pretty.Simple as ALL (pPrint)
 

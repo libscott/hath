@@ -1,9 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Network.Ethereum.Crypto.Address where
 
 import           Data.Aeson
+import           Data.Binary
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Base16 as B16
@@ -16,7 +18,7 @@ import           Hath.Prelude
 
 
 newtype Address = Address { fromAddress :: ByteString }
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Binary)
 
 instance Show Address where
   show (Address bs) = "0x" <> BS8.unpack (B16.encode bs)

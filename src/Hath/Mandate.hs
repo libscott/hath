@@ -17,7 +17,7 @@ import           Network.Ethereum.Transaction
 import           Hath.Data.Aeson
 import           Hath.Monad
 import           Hath.Prelude
-import           Hath.Mandate.Agree
+import           Hath.Mandate.Round
 
 
 data Mandate = Mandate
