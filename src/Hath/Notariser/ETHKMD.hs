@@ -120,7 +120,7 @@ doKmdNotarisation blocks utxo = do
   opRet <- getNotarisationOpReturn blocks <$> asks getCCId
   
   let message = toMsg opRet
-  results' <- campaign (toMsg opRet) (Ser2Bin (myAddr, getOutPoint utxo))
+  results' <- undefined -- campaign (toMsg opRet) (Ser2Bin (myAddr, getOutPoint utxo))
   let results = [Ballot a b (unSer2Bin c) | Ballot a b c <- results']
   (r, _) <- mandateGetMembers
   if length results >= r

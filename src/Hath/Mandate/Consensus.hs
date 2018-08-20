@@ -1,10 +1,13 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Hath.Mandate.Consensus where
 
+import           Control.Distributed.Process as CDP
 import           Control.Distributed.Process.Serializable (Serializable)
+import           Control.Monad.Trans.Maybe
 
 import qualified Data.Map as Map
 
@@ -13,19 +16,29 @@ import           Network.Ethereum.Data
 import           Network.Ethereum.RPC
 
 import           Hath.Prelude
+import           Hath.Lifted
 import           Hath.Mandate.Round
 import           Hath.Mandate.Types
 import Debug.Trace
 
 
-runRound :: (Has GethConfig r, Has Mandate r, Serializable a, Show a) => Msg -> a -> Hath r [Ballot a]
-runRound message myData = do
+runConsensusRound :: (Has GethConfig r, Has Mandate r, Serializable a, Show a)
+                  => Msg -> a -> RoundWaiter a b -> Hath r (Maybe b)
+runConsensusRound message myData waiter = do
   logInfo $ "Round topic: " ++ show (toHex $ getMsg message)
   (sk, myAddr) <- asks $ getMe . has
   (_, members) <- mandateGetMembers
   let crs = sign sk message
-      act = runAgree $ doRound message (Ballot myAddr crs myData) members
+      round = doRound message (Ballot myAddr crs myData) members
+      act = runRound round waiter
   hathReader (getProc . has) act
+
+
+majoritySigs :: Int -> RoundWaiter a [Ballot a]
+majoritySigs requiredSigs ballots = do
+  if length ballots >= requiredSigs
+     then Just ballots
+     else Nothing
 
 
 -- 2 round agreement process
@@ -36,25 +49,21 @@ agreeTx toSign = do
   (requiredSigs, members) <- mandateGetMembers
   
   let round1 = do
-        results <- runRound toSign ()
-        pure $ if length results >= requiredSigs then Just results else Nothing
+        runConsensusRound toSign () $ majoritySigs requiredSigs
 
   let round2 results = do
         let membersWhoSigned = bMember <$> results
             (candidate, _) = head $ sortOn (sha3' . abi "" ) [(bMember r, getMsg toSign) | r <- results]
             round2topic = toMsg $ abi "round2" (getMsg toSign)
-        runRound round2topic candidate
+        runConsensusRound round2topic candidate $ majoritySigs requiredSigs
 
-  round1 >>=
-    \case
-      Nothing -> pure Nothing
-      Just results1 -> do
-            results2 <- round2 results1
-            if length results2 >= requiredSigs
-               then do
-                 let sigs = bSig <$> results1
-                 pure $ ((,) sigs) <$> countVotes results2 (length members)
-               else pure Nothing
+  runMaybeT $ do
+    results1 <- MaybeT round1
+    threadDelay 10000000
+    results2 <- MaybeT $ round2 results1
+    let sigs = bSig <$> results1
+    address <- MaybeT $ pure $ countVotes results2 $ length members
+    pure $ (sigs, address)
 
 
 countVotes :: (Ord a, Show a) => [Ballot a] -> Int -> Maybe a

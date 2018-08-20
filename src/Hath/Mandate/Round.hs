@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
@@ -8,18 +9,17 @@
 module Hath.Mandate.Round
   ( AgreementProcess(..)
   , Ballot(..)
+  , RoundWaiter
   , spawnAgree
   , inventoryIndex
   , prioritiseRemoteInventory
   , dedupeInventoryQueries
-  , runAgree
   , doRound
   , runSeed
+  , runRound
   ) where
 
 import           Control.Monad
-import           Control.Concurrent (threadDelay)
-import           Control.Concurrent.MVar
 
 import           Control.Distributed.Process as DP
 import           Control.Distributed.Process.Node as DPN
@@ -35,6 +35,7 @@ import           GHC.Generics (Generic)
 
 import           Network.Ethereum.Crypto
 import qualified Hath.Mandate.P2P as P2P
+import           Hath.Lifted
 import           Hath.Prelude
 import Debug.Trace
 
@@ -46,7 +47,6 @@ runSeed = do
       ext = const (host, port)
   node <- P2P.createLocalNode host port ext initRemoteTable
   runProcess node $ P2P.peerController []
-
 
 data AgreementProcess = AgreementProcess
   { apNode :: LocalNode
@@ -60,20 +60,39 @@ spawnAgree seed port = do
   (node, _) <- P2P.startP2P host port ext initRemoteTable seeds
   pure $ AgreementProcess node
 
-
 runAgree :: Has AgreementProcess r => Process a -> Hath r a
 runAgree act = do
   node <- asks $ apNode . has
   liftIO $ do
     handoff <- newEmptyMVar
-    runProcess node $ act >>= liftIO . putMVar handoff
+    runProcess node $ act >>= putMVar handoff
     takeMVar handoff
+
+type RoundWaiter a b = [Ballot a] -> Maybe b
+
+runRound :: (Serializable a, Has AgreementProcess r)
+         => (ProcessId -> Process ()) -> RoundWaiter a b -> Hath r (Maybe b)
+runRound runner test = do
+  node <- asks $ apNode . has
+  runAgree $ do
+    myPid <- getSelfPid
+    runnerPid <- liftIO $ forkProcess node $ runner myPid
+    _ <- monitor runnerPid
+    let died (ProcessMonitorNotification mref pid reason) = do
+          say $ "Died: " ++ show (mref, pid, reason)
+          pure Nothing
+    fix $ \f -> do
+      let wrapWait = maybe f (pure . Just) . test
+      receiveWait [match wrapWait, match died]
+
 
 data Ballot a = Ballot
   { bMember :: Address
   , bSig :: CompactRecSig
   , bData :: a
-  } deriving (Show)
+  } deriving (Show, Generic)
+
+instance Binary a => Binary (Ballot a)
 
 type Inventory a = Map Address (CompactRecSig, a)
 
@@ -94,22 +113,14 @@ data Round a = Round
   , mySend :: (ProcessId -> RoundMsg a -> Process ())
   }
 
-repeatMatch :: Int -> [Match ()] -> Process ()
-repeatMatch usTimeout matches = do
-  startTime <- liftIO $ getCurrentTime
-  fix $ \f -> do
-    t <- diffUTCTime startTime <$> liftIO getCurrentTime
-    let us = max 0 $ round $ (realToFrac t) * 1000000 + fromIntegral usTimeout
-    when (us > 0) $
-       receiveTimeout us matches >>= maybe (pure ()) (\() -> f)
-
-doRound :: forall a. (Serializable a, Show a) => Msg -> Ballot a -> [Address] -> Process [Ballot a]
-doRound message myBallot members = do
+doRound :: forall a. (Serializable a, Show a)
+        => Msg -> Ballot a -> [Address] -> ProcessId -> Process ()
+doRound message myBallot members parentId = do
   let topic = asString $ getMsg message
       (Ballot myAddr mySig myObj) = myBallot
 
   let startInventory = Map.fromList [(myAddr, (mySig, myObj))]
-  mInv <- liftIO $ newMVar startInventory
+  mInv <- newMVar startInventory
   myPid <- getSelfPid
   let mySend peer a = send peer ((mySig, a) :: (CompactRecSig, RoundMsg a))
   let round = Round topic mInv members myPid mySend
@@ -122,17 +133,20 @@ doRound message myBallot members = do
           (InventoryIndex peer theirIdx) -> do
             send invBuilder (peer, theirIdx)
           (GetInventory peer idx) -> do
-            inv <- liftIO $ readMVar mInv
+            inv <- readMVar mInv
             let idx = inventoryIndex members inv
             let subset = getInventorySubset idx members inv
             mySend peer $ InventoryData subset
-          (InventoryData inv) -> do
+          (InventoryData theirInv) -> do
             -- TODO: authenticate
-            liftIO $ modifyMVar_ mInv $ pure . Map.union inv
+            modifyMVar_ mInv $ pure . Map.union theirInv
+
+            inv <- readMVar mInv
+            let r = Map.toAscList inv
+            send parentId [Ballot a s o | (a, (s, o)) <- r]
             
             -- TODO: Make sure we are adding something new before
             -- broadcasting
-            inv <- liftIO $ readMVar mInv
             let idx = inventoryIndex members inv
             P2P.nsendPeers topic (mySig, (InventoryIndex myPid idx :: RoundMsg a))
             say $ "My inventory: " ++ show idx
@@ -157,27 +171,34 @@ doRound message myBallot members = do
                say "Signature recovery failed"
 
   let onNewPeer (P2P.NewPeer nodeId) = do
-        inv <- liftIO $ readMVar mInv
+        inv <- readMVar mInv
         let idx = inventoryIndex members inv
         nsendRemote nodeId topic (mySig, (InventoryIndex myPid idx :: RoundMsg a))
 
   repeatMatch (5 * 1000000) [match onRoundMsg, match onNewPeer]
+  say "main ended"
 
-  r <- Map.toAscList <$> liftIO (takeMVar mInv)
-  pure $ [Ballot a s o | (a, (s, o)) <- r]
+repeatMatch :: Int -> [Match ()] -> Process ()
+repeatMatch usTimeout matches = do
+  startTime <- liftIO getCurrentTime
+  fix $ \f -> do
+    t <- diffUTCTime startTime <$> liftIO getCurrentTime
+    let us = max 0 $ round $ (realToFrac t) * 1000000 + fromIntegral usTimeout
+    when (us > 0) $
+       receiveTimeout us matches >>= maybe (pure ()) (\() -> f)
 
 buildInventory :: forall a. Serializable a => Round a -> Process ()
 buildInventory round@Round{..} =
   forever $ do
     -- Stage 1: Take a few remote indexes and send requests
     idxs <- recvAll :: Process [(ProcessId, Integer)]
-    ordered <- prioritiseRemoteInventory members <$> liftIO (readMVar mInv) <*> pure idxs
+    ordered <- prioritiseRemoteInventory members <$> readMVar mInv <*> pure idxs
     let queries = dedupeInventoryQueries ordered
     forM_ queries $ \(peer, wanted) -> do
       mySend peer $ GetInventory parent wanted
-
     -- Stage 2: Take a nap
-    liftIO $ threadDelay $ 500 * 1000
+    threadDelay $ 500 * 1000
+    say "still alive"
 
 -- | Get a bit array of what inventory we have
 inventoryIndex :: [Address] -> Map Address a -> Integer

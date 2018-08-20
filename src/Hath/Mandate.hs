@@ -109,16 +109,6 @@ exportMultisigABI sigs =
       , BS.pack $ getCompactRecSigV <$> sigs
       )
 
--- Collect signatures and payloads from members
-campaign :: (Has Mandate r, Has GethConfig r, Serializable a, Show a) => Msg -> a -> Hath r [Ballot a]
-campaign message myData = do
-  logInfo $ "Topic is: " ++ show (toHex $ getMsg message)
-  (sk, myAddr) <- asks $ getMe . has
-  (_, members) <- mandateGetMembers
-  let crs = sign sk message
-      act = runAgree $ doRound message (Ballot myAddr crs myData) members
-  hathReader (getProc . has) act
-
 makeTransaction :: (Has GethConfig r, Has Mandate r) => Address -> ByteString -> Hath r Transaction
 makeTransaction dest callData = do
   (sk,myAddress) <- asks $ getMe . has
