@@ -6,6 +6,7 @@ module Network.Ethereum.Crypto
   , Address(..)
   , CompactRecSig(..)
   , Ident
+  , Key(..)
   , pubKeyAddr
   , genSecKey
   , loadSecret
@@ -95,3 +96,9 @@ toMsg = fromJust . msg . sha3'
 
 sign :: SecKey -> Msg -> CompactRecSig
 sign sk = exportCompactRecSig . signRecMsg sk
+
+
+newtype Key a = Key a
+
+instance (Show a) => ToJSON (Key a) where
+  toJSON (Key a) = toJSON $ init $ drop 8 $ show a

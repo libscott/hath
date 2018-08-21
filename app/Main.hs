@@ -3,11 +3,11 @@
 
 module Main where
 
-import qualified Data.ByteString.Lazy.Char8 as C8L
-
+import           Data.Aeson.Encode.Pretty
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Lazy.Char8 as C8L
 import qualified Data.Map as Map
 
 import           Options.Applicative
@@ -42,7 +42,7 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
 
     topMethods = subparser $
            (command "tx"       $ infoH txMethods         $ progDesc "Tx methods")
-        <> (command "keyPair"  $ infoH keyPairMethod     $ progDesc "Generate a priv/pub key pair")
+        <> (command "keypair"  $ infoH keyPairMethod     $ progDesc "Generate a priv/pub key pair")
         <> (command "contract" $ infoH contractMethods   $ progDesc "Generate contracts")
         <> (command "notarise" $ infoH notariserMethods  $ progDesc "Notariser modes")
 
@@ -60,9 +60,6 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
            (command "ethkmd" $ infoH runEthNotariserMethod  $ progDesc "Run ETH -> KMD notariser")
         <> (command "seed"   $ infoH runSeedNotariserMethod $ progDesc "Run notariser seed node")
 
-
-jsonMethod :: IO Value -> Method
-jsonMethod act = act >>= C8L.putStrLn . encode
 
 
 jsonArg :: FromJSON a => ReadM a
@@ -86,14 +83,14 @@ signTxMethod = act <$> argument skArg (metavar "secret key")
 
 
 decodeTxMethod :: Parser Method
-decodeTxMethod = pure $ jsonMethod $ do
+decodeTxMethod = jsonMethod $ pure $ do
   (txBin,_) <- B16.decode <$> BS8.getContents
   let tx = rlpDecode $ rlpDeserialize txBin :: Transaction
   pure $ toJSON tx
 
 
 recoverFromMethod :: Parser Method
-recoverFromMethod = pure $ jsonMethod $ do
+recoverFromMethod = jsonMethod $ pure $ do
   (txBin,_) <- B16.decode <$> BS8.getContents
   let tx = rlpDecode $ rlpDeserialize txBin :: Transaction
       toObj pk = object [ "pub" .= toJsonHex (BS.drop 1 (exportPubKey False pk))
@@ -109,13 +106,20 @@ txidMethod = pure $ do
   BS8.putStrLn $ toHex $ unSha3 $ txid tx
 
 
+jsonMethod :: Parser (IO Value) -> Parser Method
+jsonMethod m = e <$> doPretty <*> m
+  where doPretty = switch (long "pretty" <> short 'p' <> help "Pretty print output")
+        e p act = act >>= C8L.putStrLn . if p then encodePretty' o else encode
+        o = defConfig { confCompare = compare }
+
+
 keyPairMethod :: Parser Method
-keyPairMethod = pure $ jsonMethod $ do
+keyPairMethod = jsonMethod $ pure $ do
   sk <- genSecKey
   let pk = derivePubKey sk
-  return $ object [ "secKey" .= show sk
-                  , "pubKey" .= show pk
-                  , "addr" .= pubKeyAddr pk
+  return $ object [ "secKey" .= Key sk
+                  , "pubKey" .= Key pk
+                  , "addr"   .= pubKeyAddr pk
                   ]
 
 
