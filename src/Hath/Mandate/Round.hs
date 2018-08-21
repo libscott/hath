@@ -9,14 +9,14 @@
 module Hath.Mandate.Round
   ( AgreementProcess(..)
   , Ballot(..)
-  , RoundWaiter
+  , RoundMsg(..)
   , spawnAgree
   , inventoryIndex
   , prioritiseRemoteInventory
   , dedupeInventoryQueries
   , doRound
   , runSeed
-  , runRound
+  , runProcGet
   ) where
 
 import           Control.Monad
@@ -60,31 +60,13 @@ spawnAgree seed port = do
   (node, _) <- P2P.startP2P host port ext initRemoteTable seeds
   pure $ AgreementProcess node
 
-runAgree :: Has AgreementProcess r => Process a -> Hath r a
-runAgree act = do
+runProcGet :: Has AgreementProcess r => Process a -> Hath r a
+runProcGet act = do
   node <- asks $ apNode . has
   liftIO $ do
     handoff <- newEmptyMVar
     runProcess node $ act >>= putMVar handoff
     takeMVar handoff
-
-type RoundWaiter a b = [Ballot a] -> Maybe b
-
-runRound :: (Serializable a, Has AgreementProcess r)
-         => (ProcessId -> Process ()) -> RoundWaiter a b -> Hath r (Maybe b)
-runRound runner test = do
-  node <- asks $ apNode . has
-  runAgree $ do
-    myPid <- getSelfPid
-    runnerPid <- liftIO $ forkProcess node $ runner myPid
-    _ <- monitor runnerPid
-    let died (ProcessMonitorNotification mref pid reason) = do
-          say $ "Died: " ++ show (mref, pid, reason)
-          pure Nothing
-    fix $ \f -> do
-      let wrapWait = maybe f (pure . Just) . test
-      receiveWait [match wrapWait, match died]
-
 
 data Ballot a = Ballot
   { bMember :: Address
@@ -94,7 +76,7 @@ data Ballot a = Ballot
 
 instance Binary a => Binary (Ballot a)
 
-type Inventory a = Map Address (CompactRecSig, a)
+type Inventory a = Map Address (CompactRecSig, (Int, a))
 
 data RoundMsg a =
     JoinRound ProcessId (Inventory a)
@@ -114,13 +96,12 @@ data Round a = Round
   }
 
 doRound :: forall a. (Serializable a, Show a)
-        => Msg -> Ballot a -> [Address] -> ProcessId -> Process ()
-doRound message myBallot members parentId = do
+        => Msg -> Ballot a -> [Address] -> ([Ballot a] -> Process ()) -> Process ()
+doRound message myBallot members yield = do
   let topic = asString $ getMsg message
-      (Ballot myAddr mySig myObj) = myBallot
+      (Ballot myAddr mySig _) = myBallot
 
-  let startInventory = Map.fromList [(myAddr, (mySig, myObj))]
-  mInv <- newMVar startInventory
+  mInv <- newMVar Map.empty
   myPid <- getSelfPid
   let mySend peer a = send peer ((mySig, a) :: (CompactRecSig, RoundMsg a))
   let round = Round topic mInv members myPid mySend
@@ -128,7 +109,7 @@ doRound message myBallot members parentId = do
   invBuilder <- spawnLocal $ do
     link myPid >> buildInventory round
 
-  let handleMsg addr =
+  let handleMsg =
         \case
           (InventoryIndex peer theirIdx) -> do
             send invBuilder (peer, theirIdx)
@@ -138,33 +119,29 @@ doRound message myBallot members parentId = do
             let subset = getInventorySubset idx members inv
             mySend peer $ InventoryData subset
           (InventoryData theirInv) -> do
-            -- TODO: authenticate
-            modifyMVar_ mInv $ pure . Map.union theirInv
+            -- TODO: authenticate (authmax)
+            let betterMsg a b = if fst b > fst a then b else a
+            modifyMVar_ mInv $ pure . Map.unionWith betterMsg theirInv
 
             inv <- readMVar mInv
             let r = Map.toAscList inv
-            send parentId [Ballot a s o | (a, (s, o)) <- r]
-            
+            yield [Ballot a s o | (a, (s, (_, o))) <- r]
+
             -- TODO: Make sure we are adding something new before
             -- broadcasting
             let idx = inventoryIndex members inv
             P2P.nsendPeers topic (mySig, (InventoryIndex myPid idx :: RoundMsg a))
             say $ "My inventory: " ++ show idx
 
-  
-  -- The only thing we use the p2p library for is to bootstrap
-  -- the peer list and send a message to all peers based on a topic.
-  -- Which is already quite useful really.
-  register P2P.peerListenerService myPid
+
   register topic myPid
-  P2P.nsendPeers topic (mySig, InventoryData startInventory)
 
   let onRoundMsg (theirSig, obj) = do
         case recoverAddr message theirSig of
              Just addr ->
                if elem addr members
                   then do
-                    handleMsg addr (obj :: RoundMsg a)
+                    handleMsg (obj :: RoundMsg a)
                   else do
                     say $ "Not member or wrong round: " ++ show addr
              Nothing -> do
@@ -175,7 +152,7 @@ doRound message myBallot members parentId = do
         let idx = inventoryIndex members inv
         nsendRemote nodeId topic (mySig, (InventoryIndex myPid idx :: RoundMsg a))
 
-  repeatMatch (5 * 1000000) [match onRoundMsg, match onNewPeer]
+  repeatMatch (5000 * 1000000) [match onRoundMsg, match onNewPeer]
   say "main ended"
 
 repeatMatch :: Int -> [Match ()] -> Process ()
@@ -188,7 +165,8 @@ repeatMatch usTimeout matches = do
        receiveTimeout us matches >>= maybe (pure ()) (\() -> f)
 
 buildInventory :: forall a. Serializable a => Round a -> Process ()
-buildInventory round@Round{..} =
+buildInventory round@Round{..} = do
+  say "inventory"
   forever $ do
     -- Stage 1: Take a few remote indexes and send requests
     idxs <- recvAll :: Process [(ProcessId, Integer)]
@@ -198,7 +176,6 @@ buildInventory round@Round{..} =
       mySend peer $ GetInventory parent wanted
     -- Stage 2: Take a nap
     threadDelay $ 500 * 1000
-    say "still alive"
 
 -- | Get a bit array of what inventory we have
 inventoryIndex :: [Address] -> Map Address a -> Integer

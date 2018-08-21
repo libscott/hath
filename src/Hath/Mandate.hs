@@ -72,9 +72,7 @@ mandateProxy key target forwardCall = do
 
   let toSign = ethMsg (target, forwardCall, key, nonce)
   
-  (sigs, sender) <- agreeTx toSign >>=
-    \case Nothing -> throw AgreeFail
-          Just r -> pure r
+  (sigs, sender) <- agreeMsgFast toSign
 
   let sigData = exportMultisigABI $ sigs
       proxyMethod = "proxy(address,bytes,bytes32,uint256,bytes32[],bytes32[],bytes)"
@@ -88,7 +86,7 @@ mandateProxy key target forwardCall = do
     --postTransactionSync tx
     logInfo $ "Not posting transaction to mandateProxy!"
 
-  undefined
+  error "EOF"
 
 ethMsg :: PutABI a => a -> Msg
 ethMsg a = toMsg $ "\x19\&Ethereum Signed Message:\n32" <> sha3' (abi "" a)

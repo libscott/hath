@@ -2,68 +2,105 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Hath.Mandate.Consensus where
+
+import           Control.Monad
 
 import           Control.Distributed.Process as CDP
 import           Control.Distributed.Process.Serializable (Serializable)
 import           Control.Monad.Trans.Maybe
 
+import           Data.Binary
 import qualified Data.Map as Map
 
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data
 import           Network.Ethereum.RPC
 
+import           GHC.Generics (Generic)
+
 import           Hath.Prelude
 import           Hath.Lifted
+import qualified Hath.Mandate.P2P as P2P
 import           Hath.Mandate.Round
 import           Hath.Mandate.Types
 import Debug.Trace
 
 
-runConsensusRound :: (Has GethConfig r, Has Mandate r, Serializable a, Show a)
-                  => Msg -> a -> RoundWaiter a b -> Hath r (Maybe b)
-runConsensusRound message myData waiter = do
-  logInfo $ "Round topic: " ++ show (toHex $ getMsg message)
+permute :: Msg -> Msg
+permute = toMsg . getMsg
+
+data From = From1 [Ballot ()] | From2 [Ballot Address]
+  deriving (Generic)
+
+instance Binary From
+
+agreeMsgFast :: (Has Mandate r, Has GethConfig r)
+             => Msg -> Hath r ([CompactRecSig], Address)
+agreeMsgFast toSign = do
   (sk, myAddr) <- asks $ getMe . has
-  (_, members) <- mandateGetMembers
-  let crs = sign sk message
-      round = doRound message (Ballot myAddr crs myData) members
-      act = runRound round waiter
-  hathReader (getProc . has) act
-
-
-majoritySigs :: Int -> RoundWaiter a [Ballot a]
-majoritySigs requiredSigs ballots = do
-  if length ballots >= requiredSigs
-     then Just ballots
-     else Nothing
-
-
--- 2 round agreement process
--- round 1 is collect sigs for the tx
--- round 2 is who will send it
-agreeTx :: (Has Mandate r, Has GethConfig r) => Msg -> Hath r (Maybe ([CompactRecSig], Address))
-agreeTx toSign = do
   (requiredSigs, members) <- mandateGetMembers
-  
-  let round1 = do
-        runConsensusRound toSign () $ majoritySigs requiredSigs
 
-  let round2 results = do
-        let membersWhoSigned = bMember <$> results
-            (candidate, _) = head $ sortOn (sha3' . abi "" ) [(bMember r, getMsg toSign) | r <- results]
-            round2topic = toMsg $ abi "round2" (getMsg toSign)
-        runConsensusRound round2topic candidate $ majoritySigs requiredSigs
+  hathReader (getProc . has) $ do
+    runProcGet $ do
+      top <- getSelfPid
 
-  runMaybeT $ do
-    results1 <- MaybeT round1
-    threadDelay 10000000
-    results2 <- MaybeT $ round2 results1
-    let sigs = bSig <$> results1
-    address <- MaybeT $ pure $ countVotes results2 $ length members
-    pure $ (sigs, address)
+      -- round 1
+      let msg1 = toSign
+          sig1 = sign sk msg1
+          ballot1 = Ballot myAddr sig1 ()
+      pid1 <- spawnLocal $ doRound msg1 ballot1 members (send top . From1)
+
+      -- round 2
+      let msg2 = permute toSign
+          sig2 = sign sk msg2
+          ballot2 = Ballot myAddr sig2 (undefined::Address)
+      pid2 <- spawnLocal $ doRound msg2 ballot2 members (send top . From2)
+
+      -- peernotifier
+      _ <- spawnLocal $ do
+        getSelfPid >>= register P2P.peerListenerService
+        forever $ do
+          m <- expect :: Process P2P.NewPeer
+          send pid1 m >> send pid2 m
+
+      let run votes (n2,v2) = do
+
+            let from1 ballots = do
+                  if length ballots >= requiredSigs
+                     then do
+                       let votes' = bSig <$> ballots
+                       let obj = determineSender ballots toSign
+                       if n2 == 0 || obj /= v2
+                          then do
+                            let newData = (n2+1, obj) :: (Int, Address)
+                            send pid2 (sig2, InventoryData $ Map.singleton myAddr (sig2, newData) :: RoundMsg Address)
+                            run votes' newData
+                          else run votes' (n2, v2)
+                  else run votes (n2, v2)
+
+            let from2 ballots = do
+                  if (length ballots >= requiredSigs)
+                     then do
+                       case countVotes ballots (length members) of
+                         Nothing -> run votes (n2, v2)
+                         Just r -> pure (votes, r)
+                     else run votes (n2, v2)
+
+            r <- expect
+            case r of From1 b -> from1 b
+                      From2 b -> from2 b
+
+      send pid1 (sig1, InventoryData $ Map.singleton myAddr (sig1, (0, ())) :: RoundMsg ())
+      run [] (0, undefined)
+
+
+
+determineSender :: [Ballot a] -> Msg -> Address
+determineSender ballots message =
+  fst $ head $ sortOn (sha3' . abi "" ) [(bMember r, getMsg message) | r <- ballots]
 
 
 countVotes :: (Ord a, Show a) => [Ballot a] -> Int -> Maybe a
