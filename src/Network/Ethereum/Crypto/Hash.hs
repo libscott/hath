@@ -27,10 +27,10 @@ instance Show Sha3 where
   show (Sha3 bs) = asString (toHex bs)
 
 instance Read Sha3 where
-  readsPrec _ s =
-    if length s == 64
-       then [(Sha3 $ fromHex $ fromString s, "")]
-       else []
+  readsPrec a s
+    | take 2 s == "0x" = readsPrec a $ drop 2 s
+    | length s == 64   = [(Sha3 $ fromHex $ fromString s, "")]
+    | otherwise        = []
 
 instance IsString Sha3 where
   fromString s = read s
@@ -41,6 +41,9 @@ instance FromJSON Sha3 where
     if BS.length bs == 32
        then pure $ Sha3 bs
        else fail "malformed hash"
+
+instance ToJSON Sha3 where
+  toJSON = toJSON . Hex . unSha3
 
 instance PutABI Sha3 where
   putABI (Sha3 bs) = putABI (bytes bs :: Bytes 32)

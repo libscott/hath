@@ -20,13 +20,11 @@ import           Network.Ethereum.Transaction
 
 import           Network.JsonRpc
 
+import           Hath.Config
 import           Hath.Data.Aeson
 import           Hath.Monad
 import           Hath.Prelude
 
-
-newtype GethConfig = GethConfig { gethEndpoint :: String }
-  deriving (Show)
 
 queryEthereum :: (Has GethConfig r, ToJSON b, FromJSON a) => Text -> b -> Hath r a
 queryEthereum method params = do
@@ -62,8 +60,8 @@ instance FromJSON a => FromJSON (RPCMaybe a) where
   parseJSON val = RPCMaybe . Just <$> parseJSON val
 
 
-ethGetBlockByNumber :: (Integral a, ToJSON a, Has GethConfig r) => a -> Hath r EthBlock
-ethGetBlockByNumber number = queryEthereum "eth_getBlockByNumber" (number, False)
+eth_getBlockByNumber :: (Integral a, ToJSON a, Has GethConfig r) => a -> Hath r EthBlock
+eth_getBlockByNumber number = queryEthereum "eth_getBlockByNumber" (number, False)
 
 data EthBlock = EthBlock
   { blockNumber :: U256
@@ -77,3 +75,7 @@ instance FromJSON EthBlock where
     EthBlock <$> obj .: "number"
              <*> obj .: "hash"
              <*> obj .: "receiptsRoot"
+
+
+eth_getTransactionReceipt :: Has GethConfig r => Sha3 -> Hath r Value
+eth_getTransactionReceipt = queryEthereum "eth_getTransactionReceipt" . (:[])

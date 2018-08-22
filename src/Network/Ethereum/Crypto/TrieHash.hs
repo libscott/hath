@@ -132,7 +132,8 @@ hexPrefixDecode bs =
       (d, q) = divMod fst 16
       nibs = toNibbles rest
       isLeaf = d >= 2
-   in (isLeaf, if mod d 2 == 1 then q : nibs else nibs)
+      nibs' = if mod d 2 == 1 then q : nibs else nibs
+   in (isLeaf, nibs')
 
 trimMap :: Int -> HexMap -> HexMap
 trimMap i xs = [(drop i x, bs) | (x, bs) <- xs]

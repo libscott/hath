@@ -63,13 +63,13 @@ instance Has BitcoinConfig EthNotariser where
 instance Has Mandate EthNotariser where
   has = getMandate
 
-runEthNotariser :: Maybe Address -> String -> IO ()
-runEthNotariser maddress confPath = do
+runEthNotariser :: Maybe Address -> HathConfig -> IO ()
+runEthNotariser maddress hathConfig = do
   threadDelay 2000000
   liftIO $ initKomodo
   let gethConfig = GethConfig "http://localhost:8545"
   runHath gethConfig $ do
-    conf <- loadJsonConfig confPath
+    conf <- loadJsonConfig $ configPath hathConfig
     mandate <- loadMandate ethKmd conf maddress
     bitcoinConf <- loadBitcoinConfig "~/.komodo/komodo.conf"
     let ccId = conf .! "{ETHKMD:{ccId}}"

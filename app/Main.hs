@@ -17,7 +17,9 @@ import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Transaction
 
+import           Hath.Config
 import           Hath.Notariser.ETHKMD
+import           Hath.Notariser.ETHProof
 import           Hath.Mandate.Round
 import           Hath.Data.Aeson hiding (Parser)
 import           Hath.Monad
@@ -45,6 +47,7 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
         <> (command "keypair"  $ infoH keyPairMethod     $ progDesc "Generate a priv/pub key pair")
         <> (command "contract" $ infoH contractMethods   $ progDesc "Generate contracts")
         <> (command "notarise" $ infoH notariserMethods  $ progDesc "Notariser modes")
+        <> (command "prove"    $ infoH provingMethods    $ progDesc "Generate proofs")
 
     txMethods = subparser $
            (command "encode"    $ infoH encodeTxMethod    $ progDesc "Encode a json transaction")
@@ -60,6 +63,8 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
            (command "ethkmd" $ infoH runEthNotariserMethod  $ progDesc "Run ETH -> KMD notariser")
         <> (command "seed"   $ infoH runSeedNotariserMethod $ progDesc "Run notariser seed node")
 
+    provingMethods = subparser $
+           (command "ethkmd" $ infoH proveEthKmdTransactionMethod $ progDesc "Prove ETH transaction on KMD")
 
 
 jsonArg :: FromJSON a => ReadM a
@@ -135,18 +140,22 @@ contractProxyMethod = act <$> optInit <*> argAddress
 
 runEthNotariserMethod :: Parser Method
 runEthNotariserMethod =
-  runEthNotariser <$> optional optAddress <*> optConfig
+  runEthNotariser <$> optional optAddress <*> optHathConfig
   where
     optAddress = option auto
                  ( short 'm'
                 <> long "mandate"
                 <> help "Mandate contract address 0x..." )
-    optConfig = strOption
-                ( short 'c'
-               <> long "config"
-               <> help "Path to hath.json"
-               <> value "~/.hath/hath.json"
-               <> showDefault )
+
 
 runSeedNotariserMethod :: Parser Method
 runSeedNotariserMethod = pure runSeed
+
+
+txidArg :: Parser Sha3
+txidArg = argument auto (metavar "TXID")
+
+
+proveEthKmdTransactionMethod :: Parser Method
+proveEthKmdTransactionMethod = 
+  proveEthKmdTransaction <$> optHathConfig <*> txidArg

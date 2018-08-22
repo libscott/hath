@@ -2,6 +2,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE GADTs #-}
 
 module Network.Ethereum.Data.ABI
   ( ABI(..)
@@ -105,7 +107,7 @@ instance PutABI a => PutABI [a] where
     let innerLen = sum $ fixedLen <$> xs
     putDynamic (length xs) innerLen $ mapM_ putABI xs
 
-instance forall n. KnownNat n => PutABI (Bytes n) where
+instance forall n. (KnownNat n, n <= 32) => PutABI (Bytes n) where
   putABI (Bytes bs) =
     if BS.length bs > bytesGetN (Proxy :: Proxy n)
        then error "Bytes: data too long"
@@ -172,7 +174,7 @@ instance GetABI ByteString where
       let padding = if n == 0 then 0 else roundLen n
       BS.take n <$> takeN (padding + n)
 
-instance forall n. KnownNat n => GetABI (Bytes n) where
+instance forall n. (KnownNat n, n <= 32) => GetABI (Bytes n) where
   getABI = do
     bs <- takeN 32
     let n = bytesGetN (Proxy :: Proxy n)
@@ -210,20 +212,16 @@ newtype Bytes (n :: Nat) = Bytes { unBytes :: ByteString }
 instance Show (Bytes n) where
   show = show . asString . unBytes
 
-instance forall n. KnownNat n => IsString (Bytes n) where
+instance forall n. (KnownNat n, n <= 32) => IsString (Bytes n) where
   fromString = bytes . fromString
 
-bytes :: forall n. KnownNat n => ByteString -> Bytes n
+bytes :: forall n. (KnownNat n, n <= 32) => ByteString -> Bytes n
 bytes =
   let n = bytesGetN (Proxy :: Proxy n)
    in n `seq` Bytes
 
-bytesGetN :: forall n. KnownNat n => Proxy n -> Int
-bytesGetN p =
-  let n = natVal p
-   in if n > 32
-         then error $ "n too big: " ++ show n
-         else fromIntegral n
+bytesGetN :: forall n. (KnownNat n, n <= 32) => Proxy n -> Int
+bytesGetN = fromIntegral . natVal
 
 -- Aeson instance (for abi inside JSON) ---------------------------------------
 --

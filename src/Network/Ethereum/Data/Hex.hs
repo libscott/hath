@@ -19,6 +19,11 @@ newtype Hex = Hex { unHex :: ByteString }
 instance Show Hex where
   show (Hex bs) = show $ "0x" <> toHex bs
 
+instance Read Hex where
+  readsPrec a s
+    | take 2 s == "0x" = readsPrec a $ drop 2 s
+    | otherwise        = [(Hex $ fromHex $ fromString s, "")]
+
 instance ToJSON Hex where
   toJSON (Hex bs) = String $ decodeUtf8 $ "0x" <> toHex bs
 
@@ -28,6 +33,8 @@ instance FromJSON Hex where
     let r = if T.take 2 s == "0x" then T.drop 2 s else s
      in Hex <$> fromJsonHex (String r)
 
+
+-- U256 -----------------------------------------------------------------------
 
 newtype U256 = U256 { unU256 :: Integer }
   deriving (Eq, Ord, Enum, Num, Integral, Real)
