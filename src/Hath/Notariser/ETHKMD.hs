@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Hath.Notariser.ETHKMD where
 

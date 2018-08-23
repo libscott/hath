@@ -1,9 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleContexts #-}
 
 module Network.Bitcoin where
-
 
 import qualified Data.Map as Map
 import qualified Data.ByteString as BS
