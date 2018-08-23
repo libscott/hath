@@ -13,7 +13,7 @@ module Network.Ethereum.Crypto
   , sign
   , recover
   , recoverAddr
-  , toMsg
+  , hashMsg
   ) where
 
 
@@ -91,8 +91,8 @@ recover rs message =
    in if bad then Nothing
              else Secp256k1.recover rs message
 
-toMsg :: ByteString -> Msg
-toMsg = fromJust . msg . sha3'
+hashMsg :: ByteString -> Msg
+hashMsg = fromJust . msg . sha3'
 
 sign :: SecKey -> Msg -> CompactRecSig
 sign sk = exportCompactRecSig . signRecMsg sk

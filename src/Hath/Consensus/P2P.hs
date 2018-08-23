@@ -15,7 +15,7 @@
 -- >     liftIO $ threadDelay 1000000 -- give dispatcher a second to discover other nodes
 -- >     P2P.nsendPeers "myService" ("some", "message")
 
-module Hath.Mandate.P2P (
+module Hath.Consensus.P2P (
     -- * Starting peer controller
     startP2P,
     makeNodeId,
@@ -79,6 +79,7 @@ startP2P
 startP2P host port ext rTable seeds = do
     node <- createLocalNode host port ext rTable
     pid <- forkProcess node $ peerController seeds
+    runProcess node $ waitController $ pure ()
     return (node, pid)
 
 -- | Waits for controller to start, then runs given process

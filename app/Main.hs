@@ -20,7 +20,6 @@ import           Network.Ethereum.Transaction
 import           Hath.Config
 import           Hath.Notariser.ETHKMD
 import           Hath.Notariser.ETHProof
-import           Hath.Mandate.Round
 import           Hath.Data.Aeson hiding (Parser)
 import           Hath.Monad
 import           Hath.Prelude
@@ -149,7 +148,7 @@ runEthNotariserMethod =
 
 
 runSeedNotariserMethod :: Parser Method
-runSeedNotariserMethod = pure runSeed
+runSeedNotariserMethod = undefined -- pure runSeed
 
 
 txidArg :: Parser Sha3

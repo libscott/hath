@@ -17,7 +17,7 @@ import Control.Monad.Trans.Class as ALL
 
 import Data.ByteString as ALL (ByteString)
 import qualified Data.ByteString.Base16 as B16
-import Data.ByteString.Lazy as ALL (toStrict)
+import Data.ByteString.Lazy as ALL (toStrict, fromStrict)
 import Data.ByteString.Short as ALL (toShort, fromShort)
 import Data.Function as ALL (fix)
 import Data.List as ALL (elemIndex, sort, sortOn)

@@ -7,7 +7,9 @@ module Network.Ethereum.RPC
   , queryEthereum
   , readCall
   , postTransactionSync
-  , ethGetBlockByNumber
+  , eth_blockNumber
+  , eth_getBlockByNumber
+  , eth_getTransactionReceipt
   ) where
 
 import           Control.Concurrent (threadDelay)
@@ -60,8 +62,6 @@ instance FromJSON a => FromJSON (RPCMaybe a) where
   parseJSON val = RPCMaybe . Just <$> parseJSON val
 
 
-eth_getBlockByNumber :: (Integral a, ToJSON a, Has GethConfig r) => a -> Hath r EthBlock
-eth_getBlockByNumber number = queryEthereum "eth_getBlockByNumber" (number, False)
 
 data EthBlock = EthBlock
   { blockNumber :: U256
@@ -79,3 +79,9 @@ instance FromJSON EthBlock where
 
 eth_getTransactionReceipt :: Has GethConfig r => Sha3 -> Hath r Value
 eth_getTransactionReceipt = queryEthereum "eth_getTransactionReceipt" . (:[])
+
+eth_blockNumber :: Has GethConfig r => Hath r Integer
+eth_blockNumber = unU256 <$> queryEthereum "eth_blockNumber" ()
+
+eth_getBlockByNumber :: Has GethConfig r => Integer -> Bool -> Hath r EthBlock
+eth_getBlockByNumber n b = queryEthereum "eth_getBlockByNumber" (n, b)

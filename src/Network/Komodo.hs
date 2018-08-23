@@ -1,12 +1,47 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.Komodo where
 
+import           Data.Serialize
+import           Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8 (concat, pack)
 
 import           Network.Haskoin.Block
 import           Network.Haskoin.Constants
+import qualified Network.Haskoin.Internals as H
 
+import           Hath.Prelude
+
+
+
+-- Notarisation Data ----------------------------------------------------------
+--
+-- (Doesn't support backnotarisation yet)
+
+data NotarisationData = NOR
+  { blockHash :: H.TxHash
+  , blockNumber :: Word32
+  , symbol :: ByteString
+  , mom :: H.TxHash
+  , momDepth  :: Word16
+  , ccId :: Word16
+  } deriving (Eq, Show)
+
+instance Serialize NotarisationData where
+  put NOR{..} = do
+    put blockHash >> putWord32le blockNumber
+    mapM put (BS.unpack symbol) >> put '\0'
+    put mom >> putWord16le momDepth >> putWord16le ccId
+  get = do
+    let getSymbol =
+          get >>= \case 0 -> pure ""
+                        i -> BS.cons i <$> getSymbol
+    NOR <$> get <*> getWord32le <*> getSymbol
+        <*> get <*> getWord16le <*> getWord16le
+
+-- Komodo network settings ----------------------------------------------------
 
 initKomodo :: IO ()
 initKomodo = setNetwork komodo

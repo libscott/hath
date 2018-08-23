@@ -15,7 +15,7 @@ import           TestBitcoinContracts
 import           TestHashTrie
 import           TestABI
 import           TestRound
-import Debug.Trace
+import           TestKMDNotarisation
 
 
 main :: IO ()
@@ -25,6 +25,7 @@ main = defaultMain $ testGroup "All tests"
   , hashTrieTests
   , abiTests
   , roundPureTests
+  , kmdNotarisationOpReturnTests
   ]
 
 
