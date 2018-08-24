@@ -18,6 +18,7 @@ import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Transaction
 
 import           Hath.Config
+import           Hath.Consensus.P2P (runSeed)
 import           Hath.Notariser.ETHKMD
 import           Hath.Notariser.ETHProof
 import           Hath.Data.Aeson hiding (Parser)
@@ -148,7 +149,9 @@ runEthNotariserMethod =
 
 
 runSeedNotariserMethod :: Parser Method
-runSeedNotariserMethod = undefined -- pure runSeed
+runSeedNotariserMethod = runSeed <$> host <*> port
+  where host = argument str (metavar "HOST")
+        port = argument str (metavar "PORT")
 
 
 txidArg :: Parser Sha3

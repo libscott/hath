@@ -17,6 +17,7 @@
 
 module Hath.Consensus.P2P (
     -- * Starting peer controller
+    NewPeer(..),
     startP2P,
     makeNodeId,
     getPeers,
@@ -26,7 +27,7 @@ module Hath.Consensus.P2P (
     createLocalNode,
     peerController,
     peerListenerService,
-    NewPeer(..)
+    runSeed
 ) where
 
 import Control.Distributed.Process                as DP
@@ -61,6 +62,12 @@ initPeerState = do
     self <- getSelfPid
     peers <- liftIO $ newMVar (S.singleton self)
     return $! PeerState peers
+
+runSeed :: String -> String -> IO ()
+runSeed host port = do
+  let ext = const (host, port)
+  node <- createLocalNode host port ext initRemoteTable
+  runProcess node $ peerController []
 
 -- ** Initialization
 

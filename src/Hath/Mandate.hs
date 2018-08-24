@@ -18,15 +18,17 @@ import           Network.Ethereum.Data
 import           Network.Ethereum.RPC
 import           Network.Ethereum.Transaction
 
+import           Hath.Config
 import           Hath.Data.Aeson
 import           Hath.Monad
 import           Hath.Prelude
 import           Hath.Mandate.Types
 
 
-loadMandate :: Has GethConfig r => Bytes 32 -> Value -> Maybe Address -> Hath r Mandate
-loadMandate (Bytes appKey) allConf maddr =
+loadMandate :: Has HathConfig r => Bytes 32 -> Maybe Address -> Hath r Mandate
+loadMandate (Bytes appKey) maddr =
   traceE "loadMandate" $ do
+    allConf <- asks $ configVal . has
 
     let s = fromString $ asString $ "{secret," <> appKey <> "}"
         (Hex sk, conf) = allConf .! s

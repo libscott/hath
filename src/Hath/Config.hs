@@ -32,7 +32,6 @@ newtype GethConfig = GethConfig { gethEndpoint :: String }
 instance Has GethConfig HathConfig where
   has = GethConfig . configGethEndpoint
 
-
 loadJsonConfig :: FromJSON a => String -> Hath r a
 loadJsonConfig path = do
   traceE ("Loading config: " ++ path) $ do

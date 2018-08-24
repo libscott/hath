@@ -14,6 +14,7 @@ module Hath.Consensus
   , step
   , propose
   , ifProposer
+  , say
   ) where
 
 import           Control.Monad
@@ -39,7 +40,7 @@ import           GHC.Generics (Generic)
 import           Hath.Prelude
 import           Hath.Lifted
 import qualified Hath.Consensus.P2P as P2P
-import           Hath.Consensus.Step
+import           Hath.Consensus.Process
 
 
 -- Node -----------------------------------------------------------------------
@@ -81,43 +82,46 @@ runConsensus params topicData act = do
   ConsensusNode node <- asks $ has
   liftIO $ do
     handoff <- newEmptyMVar
-    runProcess node $ act' >>= putMVar handoff
+    runProcess node $ do
+      _ <- spawnLocal peerNotifier
+      act' >>= putMVar handoff
     takeMVar handoff
 
-step' :: Serializable a => a -> Consensus (Inventory a)
-step' obj = do
+step' :: Serializable a => a -> Waiter a -> Consensus (Inventory a)
+step' obj waiter = do
   topic <- permuteTopic
   ConsensusParams members (sk, myAddr) timeout <- ask
   let ballot = Ballot myAddr (sign sk topic) obj
   lift $ lift $ do
     (send, recv) <- newChan
     _ <- spawnLocal $ runStep topic ballot members $ sendChan send
-    waitMajority recv timeout members
+    waiter recv timeout members
 
 step :: Serializable a => a -> Consensus [Ballot a]
 step o = do
-  r <- Map.toAscList <$> step' o
+  r <- Map.toAscList <$> step' o waitMajority
   pure [Ballot a s o | (a, (s, o)) <- r]
 
 propose :: Serializable a => Consensus a -> Consensus a
 propose mObj = do
   (pAddr, isMe) <- getProposer
   obj <- if isMe then Just <$> mObj else pure Nothing
-  results <- step' obj
+  results <- step' obj $ waitProposal pAddr
   case Map.lookup pAddr results of
        Just (_, Just obj) -> pure obj
        _                  -> throw ConsensusProposalMissing
 
 getProposer :: Consensus (Address, Bool)
 getProposer = do
-  -- This gives fairly good distribution:
-  -- import hashlib
-  -- dist = [0] * 64
-  -- for i in xrange(1000000):
-  --     m = hashlib.sha256(str(i))
-  --     d = sum(map(ord, m.digest()))
-  --     distribution[d%64] += 1
-  -- print dist
+  {- This gives fairly good distribution:
+  import hashlib
+  dist = [0] * 64
+  for i in xrange(1000000):
+      m = hashlib.sha256(str(i))
+      d = sum(map(ord, m.digest()))
+      distribution[d%64] += 1
+  print dist
+  -}
   ConsensusParams members (_, myAddr) _ <- ask
   let msg2sum = sum . map fromIntegral . BS.unpack . getMsg
   topic <- get
@@ -138,9 +142,10 @@ permuteTopic = do
 
 -- Process ----
 
-waitMajority :: Serializable a => ReceivePort (Inventory a) -> Timeout
-             -> [Address] -> Process (Inventory a)
-waitMajority recv timeout members = do
+type Waiter a = ReceivePort (Inventory a) -> Timeout -> [Address] -> Process (Inventory a)
+
+waitGeneric :: Serializable a => ([Address] -> Inventory a -> Bool) -> Waiter a
+waitGeneric test recv timeout members = do
   startTime <- liftIO getCurrentTime
   fix $ \f -> do
     t <- diffUTCTime startTime <$> liftIO getCurrentTime
@@ -148,11 +153,26 @@ waitMajority recv timeout members = do
     mballots <- receiveChanTimeout us recv
     case mballots of
          Nothing -> throw ConsensusTimeout
-         Just ballots | haveMajority members ballots -> pure ballots
+         Just ballots | test members ballots -> pure ballots
          _ -> f
+
+waitMajority :: Serializable a => Waiter a
+waitMajority = waitGeneric haveMajority
+
+waitProposal :: Serializable a => Address -> Waiter a
+waitProposal pAddr = waitGeneric $ \_ inv -> Map.member pAddr inv
 
 haveMajority :: [Address] -> Inventory a -> Bool
 haveMajority members ballots =
-  let required = quot (length members) 3 + 1
+  let m = fromIntegral $ length members
+      required = floor (m / 3 * 2) + 1
    in length ballots >= required
 
+peerNotifier :: Process ()
+peerNotifier = do
+  getSelfPid >>= register P2P.peerListenerService
+  f []
+  where
+    f pids = do
+      let fanout m = forM_ pids $ \p -> send p (m :: P2P.NewPeer)
+      receiveWait [ match fanout, match $ f . (:pids) ]

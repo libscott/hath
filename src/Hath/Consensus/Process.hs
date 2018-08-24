@@ -6,7 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MonoLocalBinds #-}
 
-module Hath.Consensus.Step
+module Hath.Consensus.Process
   ( Ballot(..)
   , StepMsg(..)
   , Inventory
@@ -14,7 +14,6 @@ module Hath.Consensus.Step
   , prioritiseRemoteInventory
   , dedupeInventoryQueries
   , runStep
-  , runSeed
   ) where
 
 import           Control.Monad
@@ -35,16 +34,7 @@ import           Network.Ethereum.Crypto
 import qualified Hath.Consensus.P2P as P2P
 import           Hath.Lifted
 import           Hath.Prelude
-import Debug.Trace
 
-
-runSeed :: IO ()
-runSeed = do
-  let host = "localhost"
-      port = "18089"
-      ext = const (host, port)
-  node <- P2P.createLocalNode host port ext initRemoteTable
-  runProcess node $ P2P.peerController []
 
 data Ballot a = Ballot
   { bMember :: Address
@@ -110,8 +100,6 @@ runStep message myBallot members yield = do
             say $ "My inventory: " ++ show idx
 
 
-  register topic myPid
-
   let onStepMsg (theirSig, obj) = do
         case recoverAddr message theirSig of
              Just addr ->
@@ -128,8 +116,11 @@ runStep message myBallot members yield = do
         let idx = inventoryIndex members inv
         nsendRemote nodeId topic (mySig, (InventoryIndex myPid idx :: StepMsg a))
 
-  repeatMatch (5000 * 1000000) [match onStepMsg, match onNewPeer]
-  say "main ended"
+  nsend P2P.peerListenerService myPid
+  register topic myPid
+  P2P.nsendPeers topic (mySig, InventoryData $ Map.singleton myAddr (mySig, myData))
+  --repeatMatch (5000 * 1000000)
+  forever $ receiveWait [match onStepMsg, match onNewPeer]
 
 repeatMatch :: Int -> [Match ()] -> Process ()
 repeatMatch usTimeout matches = do
@@ -142,7 +133,6 @@ repeatMatch usTimeout matches = do
 
 buildInventory :: forall a. Serializable a => Step a -> Process ()
 buildInventory step@Step{..} = do
-  say "inventory"
   forever $ do
     -- Stage 1: Take a few remote indexes and send requests
     idxs <- recvAll :: Process [(ProcessId, Integer)]
