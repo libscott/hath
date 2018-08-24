@@ -8,13 +8,19 @@ module Hath.Consensus
   ( Consensus
   , ConsensusNode(..)
   , ConsensusParams(..)
+  , ConsensusException(..)
   , Ballot(..)
+  , Waiter
   , spawnConsensusNode
   , runConsensus
   , step
   , propose
   , ifProposer
   , say
+  , waitMembers
+  , waitMajority
+  , haveMajority
+  , waitGeneric
   ) where
 
 import           Control.Monad
@@ -70,7 +76,9 @@ data ConsensusParams = ConsensusParams
 type Topic = Msg
 type Consensus = StateT Topic (ReaderT ConsensusParams Process)
 
-data ConsensusException = ConsensusTimeout | ConsensusProposalMissing
+data ConsensusException = ConsensusTimeout
+                        | ConsensusProposalMissing
+                        | ConsensusMischief String
   deriving (Show)
 instance Exception ConsensusException
 
@@ -83,36 +91,38 @@ runConsensus params topicData act = do
   liftIO $ do
     handoff <- newEmptyMVar
     runProcess node $ do
-      _ <- spawnLocal peerNotifier
+      _ <- spawnLocalLink P2P.peerNotifier
       act' >>= putMVar handoff
     takeMVar handoff
 
-step' :: Serializable a => a -> Waiter a -> Consensus (Inventory a)
-step' obj waiter = do
+-- Coordinate Round -----------------------------------------------------------
+
+step' :: Serializable a => Waiter a -> a -> Consensus (Inventory a)
+step' waiter obj = do
   topic <- permuteTopic
   ConsensusParams members (sk, myAddr) timeout <- ask
   let ballot = Ballot myAddr (sign sk topic) obj
   lift $ lift $ do
     (send, recv) <- newChan
-    _ <- spawnLocal $ runStep topic ballot members $ sendChan send
+    _ <- spawnLocalLink $ runStep topic ballot members $ sendChan send
     waiter recv timeout members
 
-step :: Serializable a => a -> Consensus [Ballot a]
-step o = do
-  r <- Map.toAscList <$> step' o waitMajority
+step :: Serializable a => Waiter a -> a -> Consensus [Ballot a]
+step waiter o = do
+  r <- Map.toAscList <$> step' waiter o
   pure [Ballot a s o | (a, (s, o)) <- r]
 
 propose :: Serializable a => Consensus a -> Consensus a
 propose mObj = do
-  (pAddr, isMe) <- getProposer
+  (pAddr, isMe) <- determineProposer
   obj <- if isMe then Just <$> mObj else pure Nothing
-  results <- step' obj $ waitProposal pAddr
+  results <- step' (waitMembers [pAddr]) obj
   case Map.lookup pAddr results of
        Just (_, Just obj) -> pure obj
        _                  -> throw ConsensusProposalMissing
 
-getProposer :: Consensus (Address, Bool)
-getProposer = do
+determineProposer :: Consensus (Address, Bool)
+determineProposer = do
   {- This gives fairly good distribution:
   import hashlib
   dist = [0] * 64
@@ -131,7 +141,7 @@ getProposer = do
 
 ifProposer :: Consensus () -> Consensus ()
 ifProposer act = do
-  (_, isMe) <- getProposer
+  (_, isMe) <- determineProposer
   when isMe act
 
 permuteTopic :: Consensus Topic
@@ -156,23 +166,15 @@ waitGeneric test recv timeout members = do
          Just ballots | test members ballots -> pure ballots
          _ -> f
 
+waitMembers :: Serializable a => [Address] -> Waiter a
+waitMembers addrs = waitGeneric $ \_ inv -> allSigned inv
+  where allSigned inv = all id [Map.member a inv | a <- addrs]
+
 waitMajority :: Serializable a => Waiter a
 waitMajority = waitGeneric haveMajority
-
-waitProposal :: Serializable a => Address -> Waiter a
-waitProposal pAddr = waitGeneric $ \_ inv -> Map.member pAddr inv
 
 haveMajority :: [Address] -> Inventory a -> Bool
 haveMajority members ballots =
   let m = fromIntegral $ length members
       required = floor (m / 3 * 2) + 1
    in length ballots >= required
-
-peerNotifier :: Process ()
-peerNotifier = do
-  getSelfPid >>= register P2P.peerListenerService
-  f []
-  where
-    f pids = do
-      let fanout m = forM_ pids $ \p -> send p (m :: P2P.NewPeer)
-      receiveWait [ match fanout, match $ f . (:pids) ]

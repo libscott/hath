@@ -27,7 +27,8 @@ module Hath.Consensus.P2P (
     createLocalNode,
     peerController,
     peerListenerService,
-    runSeed
+    runSeed,
+    peerNotifier
 ) where
 
 import Control.Distributed.Process                as DP
@@ -133,6 +134,15 @@ peerController seeds = do
                           ]
 
 -- ** Discovery
+
+peerNotifier :: Process ()
+peerNotifier = do
+  getSelfPid >>= register peerListenerService
+  f []
+  where
+    f pids = do
+      let fanout m = forM_ pids $ \p -> send p (m :: NewPeer)
+      receiveWait [ match fanout, match $ f . (:pids) ]
 
 -- Goes from a node to a process
 doDiscover :: NodeId -> Process ()

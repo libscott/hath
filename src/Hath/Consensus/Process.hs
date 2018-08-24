@@ -1,19 +1,13 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MonoLocalBinds #-}
 
 module Hath.Consensus.Process
   ( Ballot(..)
-  , StepMsg(..)
   , Inventory
   , inventoryIndex
   , prioritiseRemoteInventory
   , dedupeInventoryQueries
   , runStep
+  , spawnLocalLink
   ) where
 
 import           Control.Monad
@@ -44,23 +38,25 @@ data Ballot a = Ballot
 
 instance Binary a => Binary (Ballot a)
 
+type Authenticated a = (CompactRecSig, a)
 type Inventory a = Map Address (CompactRecSig, a)
 
-data StepMsg a =
-    JoinStep ProcessId (Inventory a)
-  | InventoryIndex ProcessId Integer
-  | GetInventory ProcessId Integer
-  | InventoryData (Inventory a)
-  deriving (Show, Generic)
+data InventoryIndex = InventoryIndex ProcessId Integer deriving (Generic)
+data GetInventory = GetInventory ProcessId Integer deriving (Generic)
+data InventoryData a = InventoryData (Inventory a) deriving (Generic)
 
-instance Binary a => Binary (StepMsg a)
+instance Binary InventoryIndex
+instance Binary GetInventory
+instance Binary a => Binary (InventoryData a)
 
 data Step a = Step
   { topic :: String
   , mInv :: MVar (Inventory a)
   , members :: [Address]
   , parent :: ProcessId
-  , mySend :: (ProcessId -> StepMsg a -> Process ())
+  , yield :: (Inventory a -> Process ())
+  , mySig :: CompactRecSig
+  , message :: Msg
   }
 
 runStep :: forall a. Serializable a
@@ -71,56 +67,58 @@ runStep message myBallot members yield = do
 
   mInv <- newMVar Map.empty
   myPid <- getSelfPid
-  let mySend peer a = send peer ((mySig, a) :: (CompactRecSig, StepMsg a))
-  let step = Step topic mInv members myPid mySend
-
-  invBuilder <- spawnLocal $ do
-    link myPid >> buildInventory step
-
-  let handleMsg =
-        \case
-          (InventoryIndex peer theirIdx) -> do
-            send invBuilder (peer, theirIdx)
-          (GetInventory peer idx) -> do
-            inv <- readMVar mInv
-            let idx = inventoryIndex members inv
-            let subset = getInventorySubset idx members inv
-            mySend peer $ InventoryData subset
-          (InventoryData theirInv) -> do
-            -- TODO: authenticate (authmax)
-            modifyMVar_ mInv $ pure . Map.union theirInv
-
-            inv <- readMVar mInv
-            yield inv
-
-            -- TODO: Make sure we are adding something new before
-            -- broadcasting
-            let idx = inventoryIndex members inv
-            P2P.nsendPeers topic (mySig, (InventoryIndex myPid idx :: StepMsg a))
-            say $ "My inventory: " ++ show idx
-
-
-  let onStepMsg (theirSig, obj) = do
-        case recoverAddr message theirSig of
-             Just addr ->
-               if elem addr members
-                  then do
-                    handleMsg (obj :: StepMsg a)
-                  else do
-                    say $ "Not member or wrong step: " ++ show addr
-             Nothing -> do
-               say "Signature recovery failed"
-
-  let onNewPeer (P2P.NewPeer nodeId) = do
-        inv <- readMVar mInv
-        let idx = inventoryIndex members inv
-        nsendRemote nodeId topic (mySig, (InventoryIndex myPid idx :: StepMsg a))
+  let step = Step topic mInv members myPid yield mySig message
+  builder <- spawnLocalLink $ buildInventory step
 
   nsend P2P.peerListenerService myPid
   register topic myPid
-  P2P.nsendPeers topic (mySig, InventoryData $ Map.singleton myAddr (mySig, myData))
-  --repeatMatch (5000 * 1000000)
-  forever $ receiveWait [match onStepMsg, match onNewPeer]
+  send myPid (mySig, InventoryData $ Map.singleton myAddr (mySig, myData))
+  forever $ receiveWait [ match $ onInventoryIndex builder step
+                        , match $ onGetInventory step
+                        , match $ onInventoryData step
+                        , match $ onNewPeer step
+                        ]
+
+onNewPeer :: Step a -> P2P.NewPeer -> Process ()
+onNewPeer Step{..} (P2P.NewPeer nodeId) = do
+  inv <- readMVar mInv
+  let idx = inventoryIndex members inv
+  nsendRemote nodeId topic (mySig, InventoryIndex parent idx)
+
+authenticate :: (Step a -> b -> Process ()) -> Step a -> (CompactRecSig, b) -> Process ()
+authenticate act step@Step{..} (theirSig, obj) =
+  case recoverAddr message theirSig of
+       Just addr ->
+         if elem addr members
+            then do
+              act step obj
+            else do
+              say $ "Not member or wrong step: " ++ show addr
+       Nothing -> do
+         say "Signature recovery failed"
+
+onInventoryIndex :: ProcessId -> Step a -> Authenticated InventoryIndex -> Process ()
+onInventoryIndex builder = authenticate $ \Step{..} (InventoryIndex peer theirIdx) ->
+  send builder (peer, theirIdx)
+
+onGetInventory :: Serializable a => Step a -> Authenticated GetInventory -> Process ()
+onGetInventory = authenticate $ \Step{..} (GetInventory peer idx) -> do
+  inv <- readMVar mInv
+  let idx = inventoryIndex members inv
+  let subset = getInventorySubset idx members inv
+  send peer (mySig, InventoryData subset)
+
+onInventoryData :: Step a -> Authenticated (InventoryData a) -> Process ()
+onInventoryData = authenticate $ \Step{..} (InventoryData theirInv) -> do
+  oldIdx <- inventoryIndex members <$> readMVar mInv
+  -- TODO: authenticate
+  modifyMVar_ mInv $ pure . Map.union theirInv
+
+  inv <- readMVar mInv
+  let idx = inventoryIndex members inv
+  when (0 /= idx .&. complement oldIdx) $ do
+    yield inv
+    P2P.nsendPeers topic (mySig, InventoryIndex parent idx)
 
 repeatMatch :: Int -> [Match ()] -> Process ()
 repeatMatch usTimeout matches = do
@@ -132,14 +130,14 @@ repeatMatch usTimeout matches = do
        receiveTimeout us matches >>= maybe (pure ()) (\() -> f)
 
 buildInventory :: forall a. Serializable a => Step a -> Process ()
-buildInventory step@Step{..} = do
+buildInventory Step{..} = do
   forever $ do
     -- Stage 1: Take a few remote indexes and send requests
     idxs <- recvAll :: Process [(ProcessId, Integer)]
     ordered <- prioritiseRemoteInventory members <$> readMVar mInv <*> pure idxs
     let queries = dedupeInventoryQueries ordered
     forM_ queries $ \(peer, wanted) -> do
-      mySend peer $ GetInventory parent wanted
+      send peer (mySig, GetInventory parent wanted)
     -- Stage 2: Take a nap
     threadDelay $ 500 * 1000
 
@@ -177,3 +175,9 @@ getInventorySubset idx members =
 
 recvAll :: Serializable a => Process [a]
 recvAll = expectTimeout 0 >>= maybe (pure []) (\a -> (a:) <$> recvAll)
+
+-- Utility
+spawnLocalLink :: Process() -> Process ProcessId
+spawnLocalLink proc = do
+  myPid <- getSelfPid
+  spawnLocal $ link myPid >> proc

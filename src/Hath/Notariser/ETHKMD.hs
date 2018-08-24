@@ -7,8 +7,10 @@ import qualified Data.Serialize as Ser
 import           Control.Concurrent (threadDelay)
 import           Control.Monad (forever)
 
+import qualified Data.Map as Map
 import           Data.Scientific
 import qualified Data.Serialize as S
+import           Data.Typeable
 
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Crypto.TrieHash
@@ -102,35 +104,40 @@ ethNotariser = do
 runNotariserConsensus :: BitcoinUtxo -> (Integer, Integer) -> Hath EthNotariser ()
 runNotariserConsensus utxo range = do
   (_, members) <- mandateGetMembers
-  (_, kmdAddr) <- getBitcoinIdent
+  (wif, kmdAddr) <- getBitcoinIdent
   ident <- asks $ getMe . has
   let cparams = ConsensusParams members ident consensusTimeout
   r <- ask
   let run = liftIO . runHath r
 
+  logInfo $ "runNotariserConsensus with block range: " ++ show range
+
   runConsensus cparams range $ do
 
     -- Step 1 - Key on opret, collect UTXOs
     run $ logDebug "Step 1: Collect UTXOs"
-    results1 <- step $ Ser2Bin (kmdAddr, getOutPoint utxo)
+    utxoBallots <- serStep waitMajority (kmdAddr, getOutPoint utxo)
 
-    run $ logDebug "Step 2: Get proposed transaction"
-    -- Step 2 - Key on (opret, proposer), get proposed transaction
-    let utxoBallots = [b { bData = unSer2Bin $ bData b } | b <- results1]
-        ptx = Ser2Bin $ proposeTransaction utxoBallots
-    tx <- unSer2Bin <$> propose (pure ptx)
+    -- Step 2 - TODO: Key on proposer
+    run $ logDebug "Step 2: Get proposed UTXOs"
+    utxosChosen <- serPropose $ pure $ proposeInputs utxoBallots
 
-    -- Step 3 - 
-    run $ logDebug "Step 3: TBD"
-    ifProposer $ do
-      run $ logInfo "I am proposer - not sending TX"
-    run $ waitTx $ tx
+    -- Step 3 - Sign tx and collect signed inputs
+    run $ logDebug "Step 3: Sign & collect"
+    let signedTx = signMyInput wif utxosChosen
+        myInput = getMyInput utxo signedTx
+        waitSigs = waitOutpoints $ snd <$> utxosChosen
+    allSignedInputs <- serStep waitSigs myInput
+    let finalTx = compileFinalTx signedTx allSignedInputs
 
+    -- Step 4 - Confirm step 3 (bad attempt to overcome two general's problem)
+    run $ logDebug "Step 4: Don't actually overcome 2 generals problem"
+    _ <- step waitMajority ()
 
-waitTx :: H.Tx -> Hath EthNotariser ()
-waitTx tx = do
-  liftIO $ threadDelay 10000000
-  error "what now?"
+    run $ logDebug "Broadcast transaction"
+    run $ logDebug $ show finalTx
+
+    liftIO $ threadDelay 10000000
 
 getBlockLimits :: Hath EthNotariser (Maybe (Integer, Integer))
 getBlockLimits = do
@@ -165,23 +172,35 @@ getLastNotarisation symbol = do
                 let Right out = S.decode bs
                  in Just out
 
-
 getEthProposeHeight :: Has GethConfig r => Integer -> Hath r Integer
 getEthProposeHeight n = do
   height <- eth_blockNumber
   pure $ height - mod height n
 
+waitOutpoints :: [H.OutPoint] -> Waiter (Ser2Bin (Maybe H.TxIn))
+waitOutpoints given = waitGeneric test
+  where test _ inv =
+          let getOPs = map H.prevOutput . catMaybes . map unSer2Bin . map snd
+              vals = getOPs $ Map.elems inv
+           in sortOn show vals == sortOn show given
+
+-- Annoying functions (Haskoin data has Serialize but not Binary)
+
+serStep :: (S.Serialize a, Typeable a) => Waiter (Ser2Bin a) -> a -> Consensus [Ballot a]
+serStep waiter obj = do
+  out <- step waiter $ Ser2Bin obj
+  pure $ [b { bData = unSer2Bin $ bData b } | b <- out]
+
+serPropose :: (Ser.Serialize a, Typeable a) => Consensus a -> Consensus a
+serPropose mobj = unSer2Bin <$> propose (Ser2Bin <$> mobj)
 
 -- Building KMD Notarisation TX -----------------------------------------------
 
-proposeTransaction :: [Ballot (H.Address, H.OutPoint)] -> H.Tx
-proposeTransaction ballots =
-  let toSigIn (a, o) = H.SigInput (H.PayPKHash $ H.getAddrHash a) o (H.SigAll False) Nothing
-      inputs = take notaryTxSigs $ toSigIn . bData <$> sortOn bSig ballots
-      outputAmount = round (kmdInputAmount/100*1e8) -- TODO: calc based on inputs
-      outputs = [(notarisationRecip, outputAmount)] -- TODO: , (opRet, 0)]
-   in either error id $ H.buildTx (H.sigDataOP <$> inputs) outputs
+data Consens
 
+proposeInputs :: [Ballot (H.Address, H.OutPoint)] -> [(H.Address, H.OutPoint)]
+proposeInputs ballots =
+  take notaryTxSigs $ bData <$> sortOn bSig ballots
 
 type BitcoinIdent = (H.PrvKey, H.Address)
 
@@ -190,9 +209,37 @@ getBitcoinIdent = do
   (sk,_) <- asks $ getMe . getMandate
   let bitcoinKey = H.makePrvKey sk
   pure $ (bitcoinKey, H.pubKeyAddr $ H.derivePubKey bitcoinKey)
---
+
 chooseUtxo :: [BitcoinUtxo] -> Maybe BitcoinUtxo
 chooseUtxo = listToMaybe . choose
   where
     choose = reverse . sortOn (\c -> (utxoConfirmations c, utxoTxid c))
                      . filter ((==kmdInputAmount) . utxoAmount)
+
+signMyInput :: H.PrvKey -> [(H.Address, H.OutPoint)] -> H.Tx
+signMyInput wif ins = do
+  let toSigIn (a, o) = H.SigInput (H.PayPKHash $ H.getAddrHash a) o (H.SigAll False) Nothing
+      inputs = toSigIn <$> ins
+      outputAmount = round (kmdInputAmount/100*1e8) -- TODO: calc based on inputs
+      outputs = [(notarisationRecip, outputAmount)] -- TODO: , (opRet, 0)]
+      etx = H.buildTx (H.sigDataOP <$> inputs) outputs
+      signTx tx = H.signTx tx inputs [wif]
+   in either error id $ etx >>= signTx
+
+getMyInput :: BitcoinUtxo -> H.Tx -> Maybe H.TxIn
+getMyInput myUtxo tx =
+  find (\txIn -> H.prevOutput txIn == getOutPoint myUtxo)
+       (H.txIn tx)
+
+compileFinalTx :: H.Tx -> [Ballot (Maybe H.TxIn)] -> H.Tx
+compileFinalTx tx ballots = tx { H.txIn = mergedIns }
+  where
+    signedIns = catMaybes $ bData <$> ballots
+    unsignedIns = H.txIn tx
+    mischief = throw $ ConsensusMischief $ "compileFinalTx: " ++ show (tx, ballots)
+    mergedIns = map combine unsignedIns
+    combine unsigned =
+      case find (\a -> H.prevOutput a == H.prevOutput unsigned) signedIns of
+           Nothing -> mischief
+           Just signed -> unsigned { H.scriptInput = H.scriptInput signed }
+
