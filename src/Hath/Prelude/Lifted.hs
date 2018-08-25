@@ -1,4 +1,4 @@
-module Hath.Lifted
+module Hath.Prelude.Lifted
   ( IN.MVar(..)
   , readMVar
   , modifyMVar_

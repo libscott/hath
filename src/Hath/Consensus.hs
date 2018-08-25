@@ -13,7 +13,7 @@ module Hath.Consensus
 import Control.Distributed.Process.Node
 
 import Hath.Consensus.Types
-import Hath.Consensus.Process
+import Hath.Consensus.Step
 import Hath.Consensus.Round
 import Hath.Consensus.P2P as P2P
 

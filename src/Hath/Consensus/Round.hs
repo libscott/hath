@@ -35,9 +35,9 @@ import           Network.Ethereum.Data
 import           Network.Ethereum.RPC
 
 import           Hath.Prelude
-import           Hath.Lifted
+import           Hath.Prelude.Lifted
 import qualified Hath.Consensus.P2P as P2P
-import           Hath.Consensus.Process
+import           Hath.Consensus.Step
 import           Hath.Consensus.Types
 
 
@@ -80,7 +80,11 @@ propose mObj = do
   results <- step' (waitMembers [pAddr]) obj
   case Map.lookup pAddr results of
        Just (_, Just obj) -> pure obj
-       _                  -> throw ConsensusProposalMissing
+       _                  -> rePropose
+  where
+  rePropose = do
+    lift $ lift $ say "Proposer missing, trying again"
+    propose mObj
 
 determineProposer :: Consensus (Address, Bool)
 determineProposer = do
@@ -119,10 +123,10 @@ waitGeneric test recv timeout members = do
   fix $ \f -> do
     t <- diffUTCTime startTime <$> liftIO getCurrentTime
     let us = max 0 $ round $ (realToFrac t) * 1000000 + fromIntegral timeout
-    mballots <- receiveChanTimeout us recv
-    case mballots of
+    minv <- receiveChanTimeout us recv
+    case minv of
          Nothing -> throw ConsensusTimeout
-         Just ballots | test members ballots -> pure ballots
+         Just inv | test members inv -> pure inv
          _ -> f
 
 waitMembers :: Serializable a => [Address] -> Waiter a
@@ -133,7 +137,7 @@ waitMajority :: Serializable a => Waiter a
 waitMajority = waitGeneric haveMajority
 
 haveMajority :: [Address] -> Inventory a -> Bool
-haveMajority members ballots =
+haveMajority members inv =
   let m = fromIntegral $ length members
       required = floor (m / 3 * 2) + 1
-   in length ballots >= required
+   in length inv >= required

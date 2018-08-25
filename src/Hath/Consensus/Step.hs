@@ -1,6 +1,6 @@
 {-# LANGUAGE MonoLocalBinds #-}
 
-module Hath.Consensus.Process
+module Hath.Consensus.Step
   ( Ballot(..)
   , Inventory
   , inventoryIndex
@@ -27,7 +27,7 @@ import           GHC.Generics (Generic)
 import           Network.Ethereum.Crypto
 import qualified Hath.Consensus.P2P as P2P
 import           Hath.Consensus.Types
-import           Hath.Lifted
+import           Hath.Prelude.Lifted
 import           Hath.Prelude
 
 data InventoryIndex = InventoryIndex ProcessId Integer deriving (Generic)

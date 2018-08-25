@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 
 module Network.Bitcoin where
 
@@ -9,12 +10,13 @@ import           Data.Scientific
 import qualified Hath.Data.Binary as Bin
 import           Hath.Data.Aeson hiding (Parser)
 import           Hath.Prelude
+import           Hath.Prelude.Lifted
 
 import qualified Network.Haskoin.Internals as H
 import           Network.HTTP.Simple
 
 
-type BitcoinIdent = (H.PrvKey, H.Address)
+type BitcoinIdent = (H.PrvKey, H.PubKey, H.Address)
 
 data BitcoinConfig =
   BitcoinConfig
@@ -59,9 +61,22 @@ queryBitcoin method params = hasReader $ do
   traceE ("Bitcoin RPC: " ++ asString body) $
     either (error . show) interpret $ getResponseBody response
 
+-- Send transaction
+
+bitcoinSubmitTxSync :: Has BitcoinConfig r => H.Tx -> Hath r H.TxHash
+bitcoinSubmitTxSync tx = do
+  txid <- queryBitcoin "sendrawtransaction" [tx]
+  threadDelay 500000
+  fix $ \f -> do
+    obj <- queryBitcoin "gettransaction" (txid::H.TxHash, True)
+    if obj .! "{confirmations}" == (1::Int)
+       then pure txid
+       else threadDelay 1000000 >> f
+
+-- UTXOs ----------------------------------------------------------------------
+
 bitcoinUtxos :: Has BitcoinConfig r => [H.Address] -> Hath r [BitcoinUtxo]
 bitcoinUtxos addrs = queryBitcoin "listunspent" (1::Int, 99999999::Int, addrs)
-
 
 data BitcoinUtxo = Utxo
   { utxoAmount :: Word64
@@ -96,5 +111,9 @@ instance Bin.Binary H.Address where
   get = Bin.unSer2Bin <$> Bin.get
 
 instance Bin.Binary H.OutPoint where
+  put = Bin.put . Bin.Ser2Bin
+  get = Bin.unSer2Bin <$> Bin.get
+
+instance Bin.Binary H.PubKey where
   put = Bin.put . Bin.Ser2Bin
   get = Bin.unSer2Bin <$> Bin.get

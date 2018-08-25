@@ -11,12 +11,12 @@ import qualified Network.Haskoin.Internals as H
 
 import Hath.Data.Aeson
 import Hath.Prelude
-import Hath.Lifted
+import Hath.Prelude.Lifted
 
 
 monitorUTXOs :: Has BitcoinConfig r
              => Word64 -> Int -> BitcoinIdent -> Hath r ()
-monitorUTXOs amount minimum (sk, address) = do
+monitorUTXOs amount minimum (sk, pk, address) = do
   run $ do
     available <- isRightAmount <$> bitcoinUtxos [address]
 
@@ -32,7 +32,6 @@ monitorUTXOs amount minimum (sk, address) = do
     threadDelay $ 30 * 1000000
   where
     isRightAmount = filter ((==amount) . utxoAmount)
-    pk = H.derivePubKey sk
     splits = replicate minimum (H.PayPK pk, amount)
     onError e = do
       runHath () $ logError $ show (e :: SomeException)

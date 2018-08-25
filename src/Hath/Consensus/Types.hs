@@ -9,7 +9,7 @@ import           Control.Distributed.Process.Node
 import           Network.Ethereum.Crypto
 import           GHC.Generics (Generic)
 import Hath.Prelude
-import Hath.Lifted
+import Hath.Prelude.Lifted
 import Data.Binary
 import Hath.Consensus.P2P as P2P
 
@@ -43,7 +43,6 @@ type Topic = Msg
 type Consensus = StateT Topic (ReaderT ConsensusParams Process)
 
 data ConsensusException = ConsensusTimeout
-                        | ConsensusProposalMissing
                         | ConsensusMischief String
   deriving (Show)
 instance Exception ConsensusException
