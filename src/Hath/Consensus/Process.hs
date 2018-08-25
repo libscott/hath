@@ -26,20 +26,9 @@ import           GHC.Generics (Generic)
 
 import           Network.Ethereum.Crypto
 import qualified Hath.Consensus.P2P as P2P
+import           Hath.Consensus.Types
 import           Hath.Lifted
 import           Hath.Prelude
-
-
-data Ballot a = Ballot
-  { bMember :: Address
-  , bSig :: CompactRecSig
-  , bData :: a
-  } deriving (Show, Generic)
-
-instance Binary a => Binary (Ballot a)
-
-type Authenticated a = (CompactRecSig, a)
-type Inventory a = Map Address (CompactRecSig, a)
 
 data InventoryIndex = InventoryIndex ProcessId Integer deriving (Generic)
 data GetInventory = GetInventory ProcessId Integer deriving (Generic)
@@ -181,3 +170,9 @@ spawnLocalLink :: Process() -> Process ProcessId
 spawnLocalLink proc = do
   myPid <- getSelfPid
   spawnLocal $ link myPid >> proc
+
+--signMsg :: Serializable o => Step a -> o -> Authenticated o
+--signMsg Step{..} o =
+--  let message = hashMsg $ encode o <> getMsg topic
+--   in (sign message, o)
+    

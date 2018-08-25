@@ -10,7 +10,7 @@ module Hath.Prelude
 
 import Control.Applicative as ALL
 import Control.Exception as ALL
-import Control.Monad as ALL (forM, forM_, join, when, replicateM, foldM)
+import Control.Monad as ALL (forM, forM_, join, when, replicateM, foldM, forever)
 import Control.Monad.IO.Class as ALL (liftIO)
 import Control.Monad.Reader as ALL (ask, asks)
 import Control.Monad.Trans.Class as ALL

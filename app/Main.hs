@@ -3,6 +3,7 @@
 
 module Main where
 
+import           Data.Aeson
 import           Data.Aeson.Encode.Pretty
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16

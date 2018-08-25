@@ -22,6 +22,7 @@ import           Crypto.Hash
 import           Control.Monad.Except
 import           Control.Monad.State
 
+import           Data.Aeson
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL

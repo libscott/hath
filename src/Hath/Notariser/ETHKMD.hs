@@ -4,7 +4,8 @@ module Hath.Notariser.ETHKMD where
 import qualified Data.ByteString as BS
 import qualified Data.Serialize as Ser
 
-import           Control.Concurrent (threadDelay)
+import           Control.Concurrent (forkIO, threadDelay)
+import           Control.Exception.Safe (catchAny)
 import           Control.Monad (forever)
 
 import qualified Data.Map as Map
@@ -13,7 +14,6 @@ import qualified Data.Serialize as S
 import           Data.Typeable
 
 import           Network.Ethereum.Crypto
-import           Network.Ethereum.Crypto.TrieHash
 import           Network.Ethereum.Data
 import           Network.Ethereum.RPC
 import           Network.Bitcoin
@@ -26,12 +26,9 @@ import           Hath.Data.Binary
 import           Hath.Consensus
 import           Hath.Mandate
 import           Hath.Mandate.Types
+import           Hath.Notariser.UTXOs
 import           Hath.Monad
 import           Hath.Prelude
-
-
--- Copy receipt roots from ETH to KMD to enable proof checking on KMD
--- TODO: Verify that requiredSigs >= notaryTxSigs
 
 
 notaryTxSigs :: Int
@@ -40,8 +37,8 @@ notaryTxSigs = 11
 ethKmd :: Bytes 32
 ethKmd = "ETHKMD"
 
-kmdInputAmount :: Scientific
-kmdInputAmount = 0.00098
+kmdInputAmount :: Word64
+kmdInputAmount = 9800
 
 kmdCCid :: Word16
 kmdCCid = 2
@@ -66,7 +63,8 @@ instance Has Mandate       EthNotariser where has = getMandate
 instance Has ConsensusNode EthNotariser where has = getNode
 
 
--- Entry point for ETH notariser programme
+-- Entry point for ETH notariser program
+--
 runEthNotariser :: Maybe Address -> HathConfig -> IO ()
 runEthNotariser maddress hathConfig = do
   threadDelay 2000000
@@ -84,50 +82,62 @@ runEthNotariser maddress hathConfig = do
 --
 ethNotariser :: Hath EthNotariser ()
 ethNotariser = do
-  forever $ do
-    ident@(wif, myAddr) <- getBitcoinIdent
-    logInfo $ "My bitcoin addr: " ++ show myAddr
+  ident@(wif, myAddr) <- getBitcoinIdent
+  logInfo $ "My bitcoin addr: " ++ show myAddr
+  monitorUTXOs kmdInputAmount 5 ident
+  run $ do
     mutxo <- chooseUtxo <$> bitcoinUtxos [myAddr]
     case mutxo of
          Nothing -> do
-           logWarn "Out of UTXOs..."
-           liftIO $ threadDelay $ 10 * 60 * 1000000
+           logInfo "Waiting for UTXOs"
+           liftIO $ threadDelay $ 60 * 1000000
          Just utxo -> do
-           mlimits <- getBlockLimits
-           case mlimits of
+           mblocks <- getBlocksToNotarise
+           case mblocks of
                 Nothing -> do
+                  logInfo "Waiting for more blocks to notarise"
                   liftIO $ threadDelay $ 60 * 1000000
-                Just limits -> runNotariserConsensus utxo limits
+                Just blocks -> do
+                  let ndata = getNotarisationData blocks
+                  runNotariserConsensus utxo ndata
+  where
+    onError e = do
+      runHath () $ logError $ show (e :: SomeException)
+      threadDelay $ 30 * 1000000
+    run act = do
+      r <- ask
+      _ <- liftIO $ forever $ runHath r act `catchAny` onError
+      pure ()
 
 
 -- Run consensus if UTXO and block limits are available
-runNotariserConsensus :: BitcoinUtxo -> (Integer, Integer) -> Hath EthNotariser ()
-runNotariserConsensus utxo range = do
+--
+runNotariserConsensus :: BitcoinUtxo -> NotarisationData Sha3 -> Hath EthNotariser ()
+runNotariserConsensus utxo ndata = do
   (_, members) <- mandateGetMembers
   (wif, kmdAddr) <- getBitcoinIdent
   ident <- asks $ getMe . has
   let cparams = ConsensusParams members ident consensusTimeout
   r <- ask
   let run = liftIO . runHath r
+  let opret = toStrict $ encode ndata
 
-  logInfo $ "runNotariserConsensus with block range: " ++ show range
-
-  runConsensus cparams range $ do
+  runConsensus cparams opret $ do
 
     -- Step 1 - Key on opret, collect UTXOs
     run $ logDebug "Step 1: Collect UTXOs"
-    utxoBallots <- serStep waitMajority (kmdAddr, getOutPoint utxo)
+    utxoBallots <- step waitMajority (kmdAddr, getOutPoint utxo)
 
     -- Step 2 - TODO: Key on proposer
     run $ logDebug "Step 2: Get proposed UTXOs"
-    utxosChosen <- serPropose $ pure $ proposeInputs utxoBallots
+    utxosChosen <- propose $ pure $ proposeInputs utxoBallots
 
     -- Step 3 - Sign tx and collect signed inputs
     run $ logDebug "Step 3: Sign & collect"
-    let signedTx = signMyInput wif utxosChosen
+    let signedTx = signMyInput wif utxosChosen $ H.DataCarrier opret
         myInput = getMyInput utxo signedTx
         waitSigs = waitOutpoints $ snd <$> utxosChosen
-    allSignedInputs <- serStep waitSigs myInput
+    allSignedInputs <- step waitSigs myInput
     let finalTx = compileFinalTx signedTx allSignedInputs
 
     -- Step 4 - Confirm step 3 (bad attempt to overcome two general's problem)
@@ -135,12 +145,18 @@ runNotariserConsensus utxo range = do
     _ <- step waitMajority ()
 
     run $ logDebug "Broadcast transaction"
-    run $ logDebug $ show finalTx
+    run $ logDebug $ show $ H.txHash finalTx
 
     liftIO $ threadDelay 10000000
 
-getBlockLimits :: Hath EthNotariser (Maybe (Integer, Integer))
-getBlockLimits = do
+getBlocksToNotarise :: Hath EthNotariser (Maybe [EthBlock])
+getBlocksToNotarise = do
+  let loadBlocks (from, to) = forM [from..to] $ \n -> eth_getBlockByNumber n False
+  mrange <- getBlockRange
+  mapM loadBlocks mrange
+
+getBlockRange :: Hath EthNotariser (Maybe (Integer, Integer))
+getBlockRange = do
   mlastNota <- getLastNotarisation "ETH"
   end <- getEthProposeHeight 10
   case mlastNota of
@@ -161,7 +177,7 @@ getBlockLimits = do
                 pure $ Just (start, end)
 
 
-getLastNotarisation :: Has BitcoinConfig r => String -> Hath r (Maybe NotarisationData)
+getLastNotarisation :: Has BitcoinConfig r => String -> Hath r (Maybe (NotarisationData Sha3))
 getLastNotarisation symbol = do
   traceE "getLastNotarisation" $ do
     val <- queryBitcoin "scanNotarisationsDB" ["0", symbol, "10000"]
@@ -177,32 +193,36 @@ getEthProposeHeight n = do
   height <- eth_blockNumber
   pure $ height - mod height n
 
-waitOutpoints :: [H.OutPoint] -> Waiter (Ser2Bin (Maybe H.TxIn))
+waitOutpoints :: [H.OutPoint] -> Waiter (Maybe H.TxIn)
 waitOutpoints given = waitGeneric test
   where test _ inv =
-          let getOPs = map H.prevOutput . catMaybes . map unSer2Bin . map snd
+          let getOPs = map H.prevOutput . catMaybes . map snd
               vals = getOPs $ Map.elems inv
            in sortOn show vals == sortOn show given
 
--- Annoying functions (Haskoin data has Serialize but not Binary)
-
-serStep :: (S.Serialize a, Typeable a) => Waiter (Ser2Bin a) -> a -> Consensus [Ballot a]
-serStep waiter obj = do
-  out <- step waiter $ Ser2Bin obj
-  pure $ [b { bData = unSer2Bin $ bData b } | b <- out]
-
-serPropose :: (Ser.Serialize a, Typeable a) => Consensus a -> Consensus a
-serPropose mobj = unSer2Bin <$> propose (Ser2Bin <$> mobj)
+getNotarisationData :: [EthBlock] -> NotarisationData Sha3
+getNotarisationData blocks =
+  let notarised = last blocks
+      mom = trieRoot $ receiptsRootTrieTrie blocks
+  
+   in NOR (ethBlockHash notarised)
+          (fromIntegral $ ethBlockNumber notarised)
+          "TESTETH"
+          mom
+          (fromIntegral $ length blocks)
+          kmdCCid
+  where
+    receiptsRootTrieTrie headers =
+      let heights = ethBlockNumber <$> headers
+          roots = ethBlockReceiptsRoot <$> headers
+          keys = rlpSerialize . rlpEncode . unU256 <$> heights
+       in mapToTrie $ zip keys $ unHex <$> roots
 
 -- Building KMD Notarisation TX -----------------------------------------------
-
-data Consens
 
 proposeInputs :: [Ballot (H.Address, H.OutPoint)] -> [(H.Address, H.OutPoint)]
 proposeInputs ballots =
   take notaryTxSigs $ bData <$> sortOn bSig ballots
-
-type BitcoinIdent = (H.PrvKey, H.Address)
 
 getBitcoinIdent :: Hath EthNotariser BitcoinIdent
 getBitcoinIdent = do
@@ -216,12 +236,12 @@ chooseUtxo = listToMaybe . choose
     choose = reverse . sortOn (\c -> (utxoConfirmations c, utxoTxid c))
                      . filter ((==kmdInputAmount) . utxoAmount)
 
-signMyInput :: H.PrvKey -> [(H.Address, H.OutPoint)] -> H.Tx
-signMyInput wif ins = do
+signMyInput :: H.PrvKey -> [(H.Address, H.OutPoint)] -> H.ScriptOutput -> H.Tx
+signMyInput wif ins opret = do
   let toSigIn (a, o) = H.SigInput (H.PayPKHash $ H.getAddrHash a) o (H.SigAll False) Nothing
       inputs = toSigIn <$> ins
-      outputAmount = round (kmdInputAmount/100*1e8) -- TODO: calc based on inputs
-      outputs = [(notarisationRecip, outputAmount)] -- TODO: , (opRet, 0)]
+      outputAmount = kmdInputAmount -- TODO: calc based on inputs
+      outputs = [(notarisationRecip, outputAmount), (opret, 0)]
       etx = H.buildTx (H.sigDataOP <$> inputs) outputs
       signTx tx = H.signTx tx inputs [wif]
    in either error id $ etx >>= signTx

@@ -53,6 +53,7 @@ dependencies:
 - pretty-simple
 - QuickCheck
 - resourcet
+- safe-exceptions
 - scientific
 - secp256k1
 - text

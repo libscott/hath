@@ -32,7 +32,7 @@ import qualified Data.Text as T
 
 import           Network.Ethereum.Crypto.Address as ALL
 import           Network.Ethereum.Crypto.Hash as ALL
-import           Network.Ethereum.Crypto.TrieHash as ALL
+import           Network.Ethereum.Crypto.Trie as ALL
 import           Network.Ethereum.Data.ABI
 import           Network.Ethereum.Data.Hex
 import           Network.Ethereum.Data.RLP

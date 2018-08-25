@@ -6,12 +6,15 @@ import qualified Data.ByteString as BS
 import           Data.Attoparsec.ByteString.Char8
 import           Data.Scientific
 
+import qualified Hath.Data.Binary as Bin
 import           Hath.Data.Aeson hiding (Parser)
 import           Hath.Prelude
 
 import qualified Network.Haskoin.Internals as H
 import           Network.HTTP.Simple
 
+
+type BitcoinIdent = (H.PrvKey, H.Address)
 
 data BitcoinConfig =
   BitcoinConfig
@@ -61,19 +64,37 @@ bitcoinUtxos addrs = queryBitcoin "listunspent" (1::Int, 99999999::Int, addrs)
 
 
 data BitcoinUtxo = Utxo
-  { utxoAmount :: Scientific
+  { utxoAmount :: Word64
   , utxoConfirmations :: Int
   , utxoTxid :: H.TxHash
   , utxoVout :: Word32
+  , utxoAddress :: H.Address
   } deriving (Show)
 
 instance FromJSON BitcoinUtxo where
   parseJSON val = do
     obj <- parseJSON val
-    Utxo <$> obj .: "amount"
-         <*> obj .: "confirmations"
+    amount <- obj .: "amount"
+    Utxo (floor $ amount * (1e8::Scientific))
+         <$> obj .: "confirmations"
          <*> obj .: "txid"
          <*> obj .: "vout"
+         <*> obj .: "address"
 
 getOutPoint :: BitcoinUtxo -> H.OutPoint
 getOutPoint utxo = H.OutPoint (utxoTxid utxo) (utxoVout utxo)
+
+
+-- Instances ------------------------------------------------------------------
+
+instance Bin.Binary H.TxIn where
+  put = Bin.put . Bin.Ser2Bin 
+  get = Bin.unSer2Bin <$> Bin.get
+
+instance Bin.Binary H.Address where
+  put = Bin.put . Bin.Ser2Bin
+  get = Bin.unSer2Bin <$> Bin.get
+
+instance Bin.Binary H.OutPoint where
+  put = Bin.put . Bin.Ser2Bin
+  get = Bin.unSer2Bin <$> Bin.get

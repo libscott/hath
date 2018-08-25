@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Network.Ethereum.Crypto.TrieHash
+module Network.Ethereum.Crypto.Trie
   ( Trie(..)
   , Nibbles
   , hexMapToTrie

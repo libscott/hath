@@ -20,5 +20,3 @@ instance Ser.Serialize a => Binary (Ser2Bin a) where
   get = do
     bs <- get
     either fail (pure . Ser2Bin) $ Ser.decode bs
-
-

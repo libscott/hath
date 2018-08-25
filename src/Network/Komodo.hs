@@ -12,6 +12,7 @@ import           Network.Haskoin.Block
 import           Network.Haskoin.Constants
 import qualified Network.Haskoin.Internals as H
 
+import qualified Hath.Data.Binary as Bin
 import           Hath.Prelude
 
 
@@ -20,16 +21,16 @@ import           Hath.Prelude
 --
 -- (Doesn't support backnotarisation yet)
 
-data NotarisationData = NOR
-  { blockHash :: H.TxHash
+data NotarisationData h = NOR
+  { blockHash :: h
   , blockNumber :: Word32
   , symbol :: ByteString
-  , mom :: H.TxHash
+  , mom :: h
   , momDepth  :: Word16
   , ccId :: Word16
   } deriving (Eq, Show)
 
-instance Serialize NotarisationData where
+instance Serialize h => Serialize (NotarisationData h) where
   put NOR{..} = do
     put blockHash >> putWord32le blockNumber
     mapM put (BS.unpack symbol) >> put '\0'
@@ -40,6 +41,10 @@ instance Serialize NotarisationData where
                         i -> BS.cons i <$> getSymbol
     NOR <$> get <*> getWord32le <*> getSymbol
         <*> get <*> getWord16le <*> getWord16le
+
+instance Serialize h => Bin.Binary (NotarisationData h) where
+  put = Bin.put . Bin.Ser2Bin
+  get = Bin.unSer2Bin <$> Bin.get
 
 -- Komodo network settings ----------------------------------------------------
 

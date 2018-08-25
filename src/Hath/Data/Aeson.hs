@@ -11,7 +11,7 @@ module Hath.Data.Aeson
   ) where
 
 
-import           Data.Aeson as DA hiding (Parser, decode)
+import           Data.Aeson as DA hiding (Parser, encode, decode)
 import           Data.Aeson.Types as DA
 import           Data.Aeson.Quick as DA (build, (.?), (.!), (.%))
 import           Data.Aeson.Quick (extract, Structure)

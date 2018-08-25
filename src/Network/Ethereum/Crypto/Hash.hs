@@ -13,6 +13,7 @@ import           Crypto.Hash
 import           Data.Aeson
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
+import           Data.Serialize
 
 import           Network.Ethereum.Data.ABI
 import           Network.Ethereum.Data.Hex
@@ -38,15 +39,24 @@ instance IsString Sha3 where
 instance FromJSON Sha3 where
   parseJSON val = do
     Hex bs <- parseJSON val
-    if BS.length bs == 32
-       then pure $ Sha3 bs
-       else fail "malformed hash"
+    failableSha3 bs
 
 instance ToJSON Sha3 where
   toJSON = toJSON . Hex . unSha3
 
 instance PutABI Sha3 where
   putABI (Sha3 bs) = putABI (bytes bs :: Bytes 32)
+
+instance Serialize Sha3 where
+  put (Sha3 bs) = put bs
+  get = get >>= failableSha3
+
+
+failableSha3 :: Monad m => ByteString -> m Sha3
+failableSha3 bs = 
+  if BS.length bs == 32
+     then pure $ Sha3 bs
+     else fail "malformed hash"
 
 sha3' :: ByteString -> ByteString
 sha3' bs = BS.pack (BA.unpack (hash bs :: Digest Keccak_256))
