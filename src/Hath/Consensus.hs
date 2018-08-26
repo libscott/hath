@@ -7,6 +7,7 @@ module Hath.Consensus
   , step
   , waitGeneric
   , waitMajority
+  , majorityThreshold
   ) where
 
 

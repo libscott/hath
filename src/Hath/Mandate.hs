@@ -36,6 +36,12 @@ import           Hath.Prelude
 mandateGetMembers :: Has GethConfig r => Address -> Hath r (Int, [Address])
 mandateGetMembers addr = do
   unABI <$> readCall addr (abi "getMembers()" ())
+
+mandateGetData :: (GetABI a, Has GethConfig r) => Address -> Hath r a
+mandateGetData addr = do
+  unABI <$> readCall addr (abi "getMandate()" ())
+
+
 --
 --loadMandate :: Has HathConfig r => Bytes 32 -> Maybe Address -> Hath r Mandate
 --loadMandate (Bytes appKey) maddr =

@@ -8,10 +8,13 @@ import           Data.Serialize
 import           Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8 (concat, pack)
 
+import           Network.Bitcoin
+import           Network.Ethereum.Data.Hex
 import           Network.Haskoin.Block
 import           Network.Haskoin.Constants
 import qualified Network.Haskoin.Internals as H
 
+import           Hath.Data.Aeson
 import qualified Hath.Data.Binary as Bin
 import           Hath.Prelude
 
@@ -24,7 +27,7 @@ import           Hath.Prelude
 data NotarisationData h = NOR
   { blockHash :: h
   , blockNumber :: Word32
-  , symbol :: ByteString
+  , symbol :: String
   , mom :: h
   , momDepth  :: Word16
   , ccId :: Word16
@@ -33,18 +36,37 @@ data NotarisationData h = NOR
 instance Serialize h => Serialize (NotarisationData h) where
   put NOR{..} = do
     put blockHash >> putWord32le blockNumber
-    mapM put (BS.unpack symbol) >> put '\0'
+    mapM put symbol >> put '\0'
     put mom >> putWord16le momDepth >> putWord16le ccId
   get = do
     let getSymbol =
-          get >>= \case 0 -> pure ""
-                        i -> BS.cons i <$> getSymbol
+          get >>= \case '\0' -> pure ""
+                        i    -> (i:) <$> getSymbol
     NOR <$> get <*> getWord32le <*> getSymbol
         <*> get <*> getWord16le <*> getWord16le
 
 instance Serialize h => Bin.Binary (NotarisationData h) where
   put = Bin.put . Bin.Ser2Bin
   get = Bin.unSer2Bin <$> Bin.get
+
+-- Notarisation RPC
+
+
+findNotarisation :: (Serialize h, Has BitcoinConfig r) => Int -> String ->
+                    Hath r (Maybe (NotarisationData h))
+findNotarisation height symbol = do
+  traceE "findNotarisation" $ do
+    val <- queryBitcoin "scanNotarisationsDB" [show height, symbol, "10000"]
+    pure $ if val == Null
+              then Nothing
+              else do
+                let bs = unHex $ val .! "{opreturn}" :: ByteString
+                let Right out = decode bs
+                 in Just out
+
+getLastNotarisation :: (Serialize h, Has BitcoinConfig r) => String ->
+                       Hath r (Maybe (NotarisationData h))
+getLastNotarisation = findNotarisation 0
 
 -- Komodo network settings ----------------------------------------------------
 

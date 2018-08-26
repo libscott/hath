@@ -9,7 +9,7 @@ module Hath.Prelude
   ) where
 
 import Control.Applicative as ALL
-import Control.Exception as ALL
+import Control.Exception.Safe as ALL
 import Control.Monad as ALL (forM, forM_, join, when, replicateM, foldM, forever)
 import Control.Monad.IO.Class as ALL (liftIO)
 import Control.Monad.Reader as ALL (ask, asks)
@@ -45,9 +45,9 @@ import Debug.Trace as ALL (traceShowId)
 traceE :: String -> Hath r a -> Hath r a
 traceE prefix act = do
   r <- ask
-  let log e = do runHath () (logError prefix) >> throw (e::SomeException)
+  let log e = do runHath () (logError prefix) >> throw e
   liftIO $ do
-    runHath r act `catch` log
+    runHath r act `catchAny` log
 
 fromHex :: ByteString -> ByteString
 fromHex bs = let (b,r) = B16.decode bs

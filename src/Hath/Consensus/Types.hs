@@ -2,16 +2,17 @@
 
 module Hath.Consensus.Types where
 
+import           Control.Exception
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
 import           Network.Ethereum.Crypto
 import           GHC.Generics (Generic)
-import Hath.Prelude
-import Hath.Prelude.Lifted
-import Data.Binary
-import Hath.Consensus.P2P as P2P
+import           Hath.Prelude
+import           Hath.Prelude.Lifted
+import           Data.Binary
+import           Hath.Consensus.P2P as P2P
 
 data ConsensusNode = ConsensusNode LocalNode
 

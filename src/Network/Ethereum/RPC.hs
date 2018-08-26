@@ -37,21 +37,21 @@ readCall :: (Has GethConfig r, FromJSON a) => Address -> ByteString -> Hath r a
 readCall addr callData =
   queryEthereum "eth_call" ["{to,data}" .% (addr, Hex callData), "latest"]
 
-postTransactionSync :: Has GethConfig r => Transaction -> Hath r Value                      
-postTransactionSync tx = do                                                         
-  logInfo $ "Testing transaction"                                                   
-  callResult <- readCall (fromJust $ _to tx) (_data tx)                             
-  logInfo $ "Result: " ++ asString (callResult :: Value)                            
-  logInfo $ "Sending transaction: " ++ (show $ txid tx)                       
-  txid <- queryEthereum "eth_sendRawTransaction" [toJSON $ Hex $ encodeTx $ tx]     
-  logInfo $ "Send transaction, txid: " <> show txid                                 
-  fix $ \wait -> do                                                                 
-        liftIO $ threadDelay 1000000                                                
-        txStatus <- queryEthereum "eth_getTransactionReceipt" [txid::Value]                
-        if txStatus == Null                                                         
-           then wait                                                                
-           else if txStatus .? "{status}" == Just (U256 1)                      
-                   then pure txStatus                                               
+postTransactionSync :: Has GethConfig r => Transaction -> Hath r Value
+postTransactionSync tx = do
+  logInfo $ "Testing transaction"
+  callResult <- readCall (fromJust $ _to tx) (_data tx)
+  logInfo $ "Result: " ++ asString (callResult :: Value)
+  logInfo $ "Sending transaction: " ++ (show $ txid tx)
+  txid <- queryEthereum "eth_sendRawTransaction" [toJSON $ Hex $ encodeTx $ tx]
+  logInfo $ "Send transaction, txid: " <> show txid
+  fix $ \wait -> do
+        liftIO $ threadDelay 1000000
+        txStatus <- queryEthereum "eth_getTransactionReceipt" [txid::Value]
+        if txStatus == Null
+           then wait
+           else if txStatus .? "{status}" == Just (U256 1)
+                   then pure txStatus
                    else error $ "Unknown transaction status: " ++ show txStatus
 
 data RPCMaybe a = RPCMaybe (Maybe a)
@@ -78,7 +78,7 @@ instance FromJSON EthBlock where
 
 
 eth_getTransactionReceipt :: Has GethConfig r => Sha3 -> Hath r Value
-eth_getTransactionReceipt = queryEthereum "eth_getTransactionReceipt" . (:[])
+eth_getTransactionReceipt h = queryEthereum "eth_getTransactionReceipt" [h]
 
 eth_blockNumber :: Has GethConfig r => Hath r U256
 eth_blockNumber = queryEthereum "eth_blockNumber" ()

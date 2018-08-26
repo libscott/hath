@@ -36,7 +36,6 @@ import           System.IO
 
 main :: IO ()
 main = do
-  initKomodo
   join $ customExecParser (prefs showHelpOnEmpty) parseAct
 
 type Method = IO ()
@@ -160,5 +159,5 @@ txidArg = argument auto (metavar "TXID")
 
 
 proveEthKmdTransactionMethod :: Parser Method
-proveEthKmdTransactionMethod = undefined
---  proveEthKmdTransaction <$> optHathConfig <*> txidArg
+proveEthKmdTransactionMethod =
+  proveEthKmdTransaction <$> optGethConfig <*> txidArg

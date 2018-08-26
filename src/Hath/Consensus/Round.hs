@@ -17,6 +17,7 @@ module Hath.Consensus.Round
   , inventoryIndex
   , prioritiseRemoteInventory
   , dedupeInventoryQueries
+  , majorityThreshold
   ) where
 
 import           Control.Monad
@@ -144,3 +145,6 @@ haveMajority members inv =
   let m = fromIntegral $ length members
       required = floor (m / 3 * 2) + 1
    in length inv >= required
+
+majorityThreshold :: Int -> Int
+majorityThreshold m = floor $ fromIntegral m * 2 / 3 + 1

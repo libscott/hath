@@ -34,7 +34,7 @@ monitorUTXOs amount minimum (sk, pk, address) = do
     isRightAmount = filter ((==amount) . utxoAmount)
     splits = replicate minimum (H.PayPK pk, amount)
     onError e = do
-      runHath () $ logError $ show (e :: SomeException)
+      runHath () $ logError $ show e
       threadDelay $ 30 * 1000000
     run act = do
       r <- ask
