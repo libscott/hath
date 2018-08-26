@@ -14,6 +14,9 @@ module Hath.Consensus.Round
   , haveMajority
   , waitGeneric
   , runConsensus
+  , inventoryIndex
+  , prioritiseRemoteInventory
+  , dedupeInventoryQueries
   ) where
 
 import           Control.Monad

@@ -17,6 +17,7 @@ import           Network.Ethereum.Contracts
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Transaction
+import           Network.Komodo
 
 import           Hath.Config
 import           Hath.Consensus.P2P (runSeed)
@@ -34,7 +35,9 @@ import           System.IO
 
 
 main :: IO ()
-main = join $ customExecParser (prefs showHelpOnEmpty) parseAct
+main = do
+  initKomodo
+  join $ customExecParser (prefs showHelpOnEmpty) parseAct
 
 type Method = IO ()
 
@@ -141,18 +144,15 @@ contractProxyMethod = act <$> optInit <*> argAddress
 
 runEthNotariserMethod :: Parser Method
 runEthNotariserMethod =
-  runEthNotariser <$> optional optAddress <*> optHathConfig
-  where
-    optAddress = option auto
-                 ( short 'm'
-                <> long "mandate"
-                <> help "Mandate contract address 0x..." )
+  runEthNotariser
+  <$> optGethConfig
+  <*> optConsensusConfig
+  <*> optMandate
+  <*> strOption ( long "address" <> help "kmd address" )
 
 
 runSeedNotariserMethod :: Parser Method
-runSeedNotariserMethod = runSeed <$> host <*> port
-  where host = argument str (metavar "HOST")
-        port = argument str (metavar "PORT")
+runSeedNotariserMethod = runSeed <$> optHost <*> optPort
 
 
 txidArg :: Parser Sha3
@@ -160,5 +160,5 @@ txidArg = argument auto (metavar "TXID")
 
 
 proveEthKmdTransactionMethod :: Parser Method
-proveEthKmdTransactionMethod = 
-  proveEthKmdTransaction <$> optHathConfig <*> txidArg
+proveEthKmdTransactionMethod = undefined
+--  proveEthKmdTransaction <$> optHathConfig <*> txidArg

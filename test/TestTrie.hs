@@ -1,13 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module TestHashTrie where
+module TestTrie where
 
 import           Data.List (nub)
 import qualified Data.ByteString.Char8 as BS8
 
 import           Network.Ethereum.Data
 import           Network.Ethereum.Crypto
-import           Network.Ethereum.Crypto.TrieHash
+import           Network.Ethereum.Crypto.Trie
 import           Hath.Prelude
 
 import           Test.Tasty
@@ -29,8 +29,8 @@ prop_proof :: (Trie, Nibbles, ByteString) -> Bool
 prop_proof (trie,nibs,bs) =
   trieRoot trie == trieRoot (trieProof nibs bs $ trieProof nibs "" trie)
 
-hashTrieTests :: TestTree
-hashTrieTests = testGroup "HashTrie"
+trieTests :: TestTree
+trieTests = testGroup "trie"
   [ testProperty "proof checking" $ forAll arbitraryProofTrie prop_proof
 
   , testCase "regression 1" $

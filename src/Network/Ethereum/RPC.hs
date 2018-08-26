@@ -80,8 +80,8 @@ instance FromJSON EthBlock where
 eth_getTransactionReceipt :: Has GethConfig r => Sha3 -> Hath r Value
 eth_getTransactionReceipt = queryEthereum "eth_getTransactionReceipt" . (:[])
 
-eth_blockNumber :: Has GethConfig r => Hath r Integer
-eth_blockNumber = unU256 <$> queryEthereum "eth_blockNumber" ()
+eth_blockNumber :: Has GethConfig r => Hath r U256
+eth_blockNumber = queryEthereum "eth_blockNumber" ()
 
-eth_getBlockByNumber :: Has GethConfig r => Integer -> Bool -> Hath r EthBlock
+eth_getBlockByNumber :: Has GethConfig r => U256 -> Bool -> Hath r EthBlock
 eth_getBlockByNumber n b = queryEthereum "eth_getBlockByNumber" (n, b)

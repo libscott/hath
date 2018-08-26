@@ -6,7 +6,7 @@ import           Data.Bits
 import qualified Data.Map as Map
 
 import           Network.Ethereum.Crypto
-import           Hath.Mandate.Round
+import           Hath.Consensus.Round
 import           Hath.Prelude
 
 import           Test.Tasty

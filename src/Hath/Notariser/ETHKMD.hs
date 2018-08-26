@@ -1,16 +1,15 @@
 
 module Hath.Notariser.ETHKMD where
 
-import qualified Data.ByteString as BS
 import qualified Data.Serialize as Ser
 
 import           Control.Concurrent (forkIO, threadDelay)
 import           Control.Exception.Safe (catchAny)
 import           Control.Monad (forever)
 
+import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import           Data.Scientific
-import qualified Data.Serialize as S
 import           Data.Typeable
 
 import           Network.Ethereum.Crypto
@@ -24,11 +23,11 @@ import           Hath.Config
 import           Hath.Data.Aeson
 import           Hath.Data.Binary
 import           Hath.Consensus
-import           Hath.Mandate
-import           Hath.Mandate.Types
 import           Hath.Notariser.UTXOs
+import           Hath.Mandate
 import           Hath.Monad
 import           Hath.Prelude
+import Debug.Trace
 
 
 notaryTxSigs :: Int
@@ -41,7 +40,7 @@ kmdInputAmount :: Word64
 kmdInputAmount = 9800
 
 kmdCCid :: Word16
-kmdCCid = 2
+kmdCCid = 25555
 
 notarisationRecip :: H.ScriptOutput
 notarisationRecip = H.PayPKHash $ H.getAddrHash "RXL3YXG2ceaB6C5hfJcN4fvmLH2C34knhA"
@@ -52,30 +51,33 @@ consensusTimeout = 10 * 1000000
 
 data EthNotariser = EthNotariser
   { getKomodoConfig :: BitcoinConfig
-  , getMandate :: Mandate
   , getNode :: ConsensusNode
-  , getHathConfig :: HathConfig
+  , gethConfig :: GethConfig
+  , getMandate :: Address
+  , getSecret :: SecKey
   }
 
-instance Has GethConfig    EthNotariser where has = has . getHathConfig
+instance Has GethConfig    EthNotariser where has = gethConfig
 instance Has BitcoinConfig EthNotariser where has = getKomodoConfig
-instance Has Mandate       EthNotariser where has = getMandate
 instance Has ConsensusNode EthNotariser where has = getNode
 
 
 -- Entry point for ETH notariser program
 --
-runEthNotariser :: Maybe Address -> HathConfig -> IO ()
-runEthNotariser maddress hathConfig = do
+runEthNotariser :: GethConfig -> ConsensusNetworkConfig -> Address -> H.Address -> IO ()
+runEthNotariser gethConfig consensusConfig mandateAddr kmdAddr = do
   threadDelay 2000000
-  liftIO $ initKomodo
-  runHath hathConfig $ do
-    mandate <- loadMandate ethKmd maddress
+  initKomodo
+  runHath () $ do
     bitcoinConf <- loadBitcoinConfig "~/.komodo/komodo.conf"
-    let (seed, port) = configVal hathConfig .! "{ETHKMD:{seed,port}}"
-    node <- liftIO $ spawnConsensusNode seed port
-    let config = EthNotariser bitcoinConf mandate node
-    hathReader config ethNotariser
+
+    -- resolve pk
+    wif <- hathReader (const bitcoinConf) $ queryBitcoin "dumpprivkey" [kmdAddr]
+    let sk = H.prvKeySecKey $ (fromString wif :: H.PrvKey)
+
+    node <- liftIO $ spawnConsensusNode consensusConfig
+    let config = EthNotariser bitcoinConf node gethConfig mandateAddr sk
+    hathReader (const config) ethNotariser
 
 
 -- Run configured notariser
@@ -117,13 +119,14 @@ ethNotariser = do
 --
 runNotariserConsensus :: BitcoinUtxo -> NotarisationData Sha3 -> Hath EthNotariser ()
 runNotariserConsensus utxo ndata = do
-  (_, members) <- mandateGetMembers
+  (_, members) <- asks getMandate >>= mandateGetMembers
   (wif, pk, kmdAddr) <- getBitcoinIdent
-  ident <- asks $ getMe . has
+  sk <- asks getSecret
+  let ident = (sk, pubKeyAddr $ derivePubKey sk)
   let cparams = ConsensusParams members ident consensusTimeout
   r <- ask
   let run = liftIO . runHath r
-  let opret = toStrict $ encode ndata
+  let opret = Ser.encode ndata
 
   runConsensus cparams opret $ do
 
@@ -144,7 +147,7 @@ runNotariserConsensus utxo ndata = do
     let finalTx = compileFinalTx signedTx allSignedInputs
 
     -- Step 4 - Confirm step 3 (bad attempt to overcome two general's problem)
-    run $ logDebug "Step 4: Don't actually overcome 2 generals problem"
+    run $ logDebug "Step 4: Just for kicks"
     _ <- step waitMajority ()
 
     run $ logInfo $ "Broadcast transaction: " ++ show (H.txHash finalTx)
@@ -154,30 +157,25 @@ runNotariserConsensus utxo ndata = do
 
 getBlocksToNotarise :: Hath EthNotariser (Maybe [EthBlock])
 getBlocksToNotarise = do
-  let loadBlocks (from, to) = forM [from..to] $ \n -> eth_getBlockByNumber n False
-  mrange <- getBlockRange
-  mapM loadBlocks mrange
+  mRange <- getBlockRange
+  forM mRange $ \(from, to) -> do
+    logInfo $ "Notarising range: " ++ show (from, to)
+    forM [from..to] $ \n -> eth_getBlockByNumber n False
 
-getBlockRange :: Hath EthNotariser (Maybe (Integer, Integer))
+getBlockRange :: Hath EthNotariser (Maybe (U256, U256))
 getBlockRange = do
-  mlastNota <- getLastNotarisation "ETH"
-  end <- getEthProposeHeight 10
+  mlastNota <- getLastNotarisation "TESTETH"
   case mlastNota of
        Nothing -> do
-         logInfo $ "Starting notarisation at height: " ++ show end
+         logInfo $ "No prior notarisations found"
          pure $ Just (end, end)
        Just (NOR{..}) -> do
          let start = fromIntegral blockNumber + 1
-         case compare start end of
-              EQ -> do
-                logInfo "Waiting for more new blocks"
-                pure Nothing
-              LT -> do
-                logWarn $ "Got inconsistency in heights: "
-                          ++ show (start, end)
-                pure Nothing
-              GT -> do
-                pure $ Just (start, end)
+         end <- getEthProposeHeight 10
+         if start < end
+            then pure $ Just (start, end)
+            else do
+              logInfo $ "Waiting for more new blocks: " ++ show (start, end)
 
 
 getLastNotarisation :: Has BitcoinConfig r => String -> Hath r (Maybe (NotarisationData Sha3))
@@ -188,10 +186,10 @@ getLastNotarisation symbol = do
               then Nothing
               else do
                 let bs = unHex $ val .! "{opreturn}" :: ByteString
-                let Right out = S.decode bs
+                let Right out = Ser.decode bs
                  in Just out
 
-getEthProposeHeight :: Has GethConfig r => Integer -> Hath r Integer
+getEthProposeHeight :: Has GethConfig r => U256 -> Hath r U256
 getEthProposeHeight n = do
   height <- eth_blockNumber
   pure $ height - mod height n
@@ -228,11 +226,7 @@ proposeInputs ballots =
   take notaryTxSigs $ bData <$> sortOn bSig ballots
 
 getBitcoinIdent :: Hath EthNotariser BitcoinIdent
-getBitcoinIdent = do
-  (sk,_) <- asks $ getMe . getMandate
-  let bitcoinKey = H.makePrvKey sk
-      pubKey = H.derivePubKey bitcoinKey
-  pure $ (bitcoinKey, pubKey, H.pubKeyAddr pubKey)
+getBitcoinIdent = deriveBitcoinIdent <$> asks getSecret
 
 chooseUtxo :: [BitcoinUtxo] -> Maybe BitcoinUtxo
 chooseUtxo = listToMaybe . choose

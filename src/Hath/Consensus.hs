@@ -17,16 +17,22 @@ import Hath.Consensus.Step
 import Hath.Consensus.Round
 import Hath.Consensus.P2P as P2P
 
+import Hath.Config
+import Hath.Prelude
+
 
 -- Node -----------------------------------------------------------------------
 
 
-spawnConsensusNode :: String -> String -> IO ConsensusNode
-spawnConsensusNode seed port = do
-  let host = "localhost"
-      ext = const (host, port)
-      seeds = [P2P.makeNodeId seed]
-  (node, _) <- P2P.startP2P host port ext initRemoteTable seeds
+spawnConsensusNode :: ConsensusNetworkConfig -> IO ConsensusNode
+spawnConsensusNode CNC{..} = do
+  let port' = show port
+      ext = const (host, show port)
+      seeds' = P2P.makeNodeId . addPort <$> seeds
+      addPort s = if Nothing == elemIndex ':' s
+                     then s ++ ":" ++ port'
+                     else s
+  (node, _) <- P2P.startP2P host port' ext initRemoteTable seeds'
   pure $ ConsensusNode node
 
 

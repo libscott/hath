@@ -7,6 +7,8 @@ import qualified Data.ByteString as BS
 import           Data.Attoparsec.ByteString.Char8
 import           Data.Scientific
 
+import qualified Crypto.Secp256k1 as EC
+
 import qualified Hath.Data.Binary as Bin
 import           Hath.Data.Aeson hiding (Parser)
 import           Hath.Prelude
@@ -18,6 +20,12 @@ import           Network.HTTP.Simple
 
 type BitcoinIdent = (H.PrvKey, H.PubKey, H.Address)
 
+deriveBitcoinIdent :: EC.SecKey -> BitcoinIdent
+deriveBitcoinIdent sk =
+  let bitcoinKey = H.makePrvKey sk
+      pubKey = H.derivePubKey bitcoinKey
+   in (bitcoinKey, pubKey, H.pubKeyAddr pubKey)
+
 data BitcoinConfig =
   BitcoinConfig
     { getUser :: ByteString
@@ -25,8 +33,6 @@ data BitcoinConfig =
     , getPort :: Int
     } deriving (Show)
 
-instance Has BitcoinConfig BitcoinConfig where
-  has = id
 
 loadBitcoinConfig :: FilePath -> Hath r BitcoinConfig
 loadBitcoinConfig path = do

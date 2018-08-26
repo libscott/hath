@@ -12,9 +12,9 @@ import Hath.Prelude
 -- tx -> receiptsroot
 -- receiptsroot -> MoM (scan on KMD for notarisations from ETH)
 -- MoM -> MoMoM (scan on KMD for notarisations to XXX)
-proveEthKmdTransaction :: HathConfig -> Sha3 -> IO ()
-proveEthKmdTransaction conf txid = do
-  runHath conf $ do
-    out <- eth_getTransactionReceipt txid
-    logInfo $ show (out::Value)
-
+--proveEthKmdTransaction :: HathConfig -> Sha3 -> IO ()
+--proveEthKmdTransaction conf txid = do
+--  runHath conf $ do
+--    out <- eth_getTransactionReceipt txid
+--    logInfo $ show (out::Value)
+--

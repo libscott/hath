@@ -12,7 +12,7 @@ import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 
 import           TestBitcoinContracts
-import           TestHashTrie
+import           TestTrie
 import           TestABI
 import           TestRound
 import           TestKMDNotarisation
@@ -22,7 +22,7 @@ main :: IO ()
 main = defaultMain $ testGroup "All tests"
   [ recSigTests
   , contractTests
-  , hashTrieTests
+  , trieTests
   , abiTests
   , roundPureTests
   , kmdNotarisationOpReturnTests

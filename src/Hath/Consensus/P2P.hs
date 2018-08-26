@@ -64,10 +64,10 @@ initPeerState = do
     peers <- liftIO $ newMVar (S.singleton self)
     return $! PeerState peers
 
-runSeed :: String -> String -> IO ()
+runSeed :: String -> Word16 -> IO ()
 runSeed host port = do
-  let ext = const (host, port)
-  node <- createLocalNode host port ext initRemoteTable
+  let ext = const (host, show port)
+  node <- createLocalNode host (show port) ext initRemoteTable
   runProcess node $ peerController []
 
 -- ** Initialization

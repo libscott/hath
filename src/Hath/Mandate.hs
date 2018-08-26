@@ -22,21 +22,33 @@ import           Hath.Config
 import           Hath.Data.Aeson
 import           Hath.Monad
 import           Hath.Prelude
-import           Hath.Mandate.Types
 
 
-loadMandate :: Has HathConfig r => Bytes 32 -> Maybe Address -> Hath r Mandate
-loadMandate (Bytes appKey) maddr =
-  traceE "loadMandate" $ do
-    allConf <- asks $ configVal . has
 
-    let s = fromString $ asString $ "{secret," <> appKey <> "}"
-        (Hex sk, conf) = allConf .! s
-
-    pure $ Mandate (maybe (conf .! "{addr}") id maddr)
-                   (either error id $ loadSecret sk)
-                   (conf .! "{ethChainId}")
-                   (Bytes appKey)
+--data Mandate = Mandate
+--  { getAddress :: Address
+--  , getMe :: Ident
+--  , getChainId :: Integer
+--  , getAppKey :: Bytes 32
+--  }
+--
+--
+mandateGetMembers :: Has GethConfig r => Address -> Hath r (Int, [Address])
+mandateGetMembers addr = do
+  unABI <$> readCall addr (abi "getMembers()" ())
+--
+--loadMandate :: Has HathConfig r => Bytes 32 -> Maybe Address -> Hath r Mandate
+--loadMandate (Bytes appKey) maddr =
+--  traceE "loadMandate" $ do
+--    allConf <- asks $ configVal . has
+--
+--    let s = fromString $ asString $ "{secret," <> appKey <> "}"
+--        (Hex sk, conf) = allConf .! s
+--
+--    pure $ Mandate (maybe (conf .! "{addr}") id maddr)
+--                   (either error id $ loadSecret sk)
+--                   (conf .! "{ethChainId}")
+--                   (Bytes appKey)
 
 
 --mandateGetState :: (Has Mandate r, Has GethConfig r, GetABI a) => Bytes 32 -> Hath r a

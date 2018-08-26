@@ -48,9 +48,8 @@ instance PutABI Sha3 where
   putABI (Sha3 bs) = putABI (bytes bs :: Bytes 32)
 
 instance Serialize Sha3 where
-  put (Sha3 bs) = put bs
-  get = get >>= failableSha3
-
+  put (Sha3 bs) = putByteString bs
+  get = Sha3 <$> getByteString 32
 
 failableSha3 :: Monad m => ByteString -> m Sha3
 failableSha3 bs = 
