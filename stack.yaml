@@ -52,8 +52,7 @@ extra-deps:
   commit: 3279f5c
   subdirs:
   - haskoin-core
-#- ../haskell-ethereum-assembly
-#- haskoin-core-0.4.2
+
 
 
 # Override default flag values for local packages and extra-deps

@@ -12,7 +12,7 @@ import qualified Data.ByteString.Base16 as B16
 import           Data.String
 
 import           Network.Ethereum.Data.ABI
-import           Network.Ethereum.Data.Hex
+import           Hath.Data.Hex
 
 import           Hath.Prelude
 

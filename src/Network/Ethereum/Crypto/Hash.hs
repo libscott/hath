@@ -16,7 +16,7 @@ import qualified Data.ByteString as BS
 import           Data.Serialize
 
 import           Network.Ethereum.Data.ABI
-import           Network.Ethereum.Data.Hex
+import           Hath.Data.Hex
 import           Network.Ethereum.Data.RLP
 import           Hath.Prelude
 

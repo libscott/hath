@@ -33,9 +33,6 @@ import           Hath.Prelude
 import Debug.Trace
 
 
-notaryTxSigs :: Int
-notaryTxSigs = 11
-
 kmdInputAmount :: Word64
 kmdInputAmount = 9800
 
@@ -45,6 +42,8 @@ consensusTimeout = 10 * 1000000
 data ChainConf = CConf
   { chainCCId :: Word16
   , chainSymbol :: String
+  , chainNotarySigs :: Int
+  , chainNotaries :: [Address]
   } deriving (Generic, Show)
 
 instance FromJSON ChainConf
@@ -90,12 +89,9 @@ ethNotariser = do
   monitorUTXOs kmdInputAmount 5 ident
 
   run $ do
-    (chainConf, members) <- getMandateInfos
+    m@chainConf <- getMandateInfos
 
-    when (majorityThreshold (length members) < notaryTxSigs) $ do
-      logError "Bad error: Majority threshold is less than required notary sigs"
-      logError $ show (length members, notaryTxSigs)
-      error "Bailing"
+    checkNotarySigsPossible m
 
     mutxo <- chooseUtxo <$> bitcoinUtxos [myAddr]
     case mutxo of
@@ -112,7 +108,7 @@ ethNotariser = do
               else do
                 logInfo $ "Notarising range: " ++ show range
                 let ndata = getNotarisationData chainConf blocks
-                runNotariserConsensus utxo ndata chainConf members
+                runNotariserConsensus utxo ndata chainConf
 
                 -- Consistency check
                 mln <- getLastNotarisation $ chainSymbol chainConf
@@ -133,15 +129,21 @@ ethNotariser = do
       runHath () $ f $ show e
       threadDelay $ d * 1000000
 
+    checkNotarySigsPossible CConf{..} = do
+      when (majorityThreshold (length chainNotaries) < chainNotarySigs) $ do
+        logError "Bad error: Majority threshold is less than required notary sigs"
+        logError $ show (length chainNotaries, chainNotarySigs)
+        error "Bailing"
+
 -- Run consensus if UTXO and block limits are available
 --
 runNotariserConsensus :: BitcoinUtxo -> NotarisationData Sha3
-                      -> ChainConf -> [Address] -> Hath EthNotariser ()
-runNotariserConsensus utxo ndata cconf members = do
+                      -> ChainConf -> Hath EthNotariser ()
+runNotariserConsensus utxo ndata cconf@CConf{..} = do
   (wif, pk, kmdAddr) <- getBitcoinIdent
   sk <- asks getSecret
   let ident = (sk, pubKeyAddr $ derivePubKey sk)
-  let cparams = ConsensusParams members ident consensusTimeout
+  let cparams = ConsensusParams chainNotaries ident consensusTimeout
   r <- ask
   let run = liftIO . runHath r
   let opret = Ser.encode ndata
@@ -157,7 +159,7 @@ runNotariserConsensus utxo ndata cconf members = do
 
     -- Step 2 - TODO: Key on proposer
     run $ logDebug "Step 2: Get proposed UTXOs"
-    utxosChosen <- propose $ pure $ proposeInputs utxoBallots
+    utxosChosen <- propose $ pure $ proposeInputs cconf utxoBallots
 
     -- Step 3 - Sign tx and collect signed inputs
     run $ logDebug "Step 3: Sign & collect"
@@ -177,12 +179,13 @@ runNotariserConsensus utxo ndata cconf members = do
       logInfo $ "Transaction confirmed"
       liftIO $ threadDelay $ 10 * 1000000
 
-getMandateInfos :: Hath EthNotariser (ChainConf, [Address])
+getMandateInfos :: Hath EthNotariser ChainConf
 getMandateInfos = do
   addr <- asks getMandateAddr
   (_, members) <- mandateGetMembers addr
   val <- mandateGetData addr
-  pure $ (val .! "{ETHKMD}", members)
+  let chainConf = val .! "{ETHKMD}"
+  pure chainConf { chainNotaries = members }
 
 getBlocksInRange :: (U256, U256) -> Hath EthNotariser [EthBlock]
 getBlocksInRange (from, to) = do
@@ -233,9 +236,10 @@ getNotarisationData CConf{..} blocks =
           keys = rlpSerialize . rlpEncode . unU256 <$> heights
        in mapToTrie $ zip keys $ unHex <$> roots
 
-proposeInputs :: [Ballot (H.PubKey, H.OutPoint)] -> [(H.PubKey, H.OutPoint)]
-proposeInputs ballots =
-  take notaryTxSigs $ bData <$> sortOn bSig ballots
+proposeInputs :: ChainConf -> [Ballot (H.PubKey, H.OutPoint)] -> [(H.PubKey, H.OutPoint)]
+proposeInputs CConf{..} ballots
+  | length ballots < chainNotarySigs = error "Bad error: not enough ballots"
+  | otherwise = take chainNotarySigs $ bData <$> sortOn bSig ballots
 
 getBitcoinIdent :: Hath EthNotariser BitcoinIdent
 getBitcoinIdent = deriveBitcoinIdent <$> asks getSecret

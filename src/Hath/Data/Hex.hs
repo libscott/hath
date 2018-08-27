@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Network.Ethereum.Data.Hex
+module Hath.Data.Hex
   ( Hex(..)
   , U256(..)
   ) where

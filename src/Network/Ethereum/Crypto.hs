@@ -34,7 +34,7 @@ import           Network.Ethereum.Crypto.Address as ALL
 import           Network.Ethereum.Crypto.Hash as ALL
 import           Network.Ethereum.Crypto.Trie as ALL
 import           Network.Ethereum.Data.ABI
-import           Network.Ethereum.Data.Hex
+import           Hath.Data.Hex
 import           Network.Ethereum.Data.RLP
 import           Hath.Data.Aeson
 import           Hath.Prelude

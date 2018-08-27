@@ -30,7 +30,7 @@ import           Data.Proxy
 
 import           GHC.TypeLits
 
-import           Network.Ethereum.Data.Hex
+import           Hath.Data.Hex
 import           Network.Ethereum.Data.RLP
 import           Hath.Data.Aeson
 import           Hath.Prelude

@@ -9,7 +9,7 @@ import           Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8 (concat, pack)
 
 import           Network.Bitcoin
-import           Network.Ethereum.Data.Hex
+import           Hath.Data.Hex
 import           Network.Haskoin.Block
 import           Network.Haskoin.Constants
 import qualified Network.Haskoin.Internals as H
@@ -79,11 +79,11 @@ komodo = Network
     , getAddrPrefix = 60
     , getScriptPrefix = 85
     , getSecretPrefix = 188
-    , getExtPubKeyPrefix = 0x0488b21e
-    , getExtSecretPrefix = 0x0488ade4
+    , getExtPubKeyPrefix = 4193182861 -- 0x7634504b
 
     -- FROM HERE DOWN IS UNVERIFIED AND WRONG
 
+    , getExtSecretPrefix = 0x0488ade4
     , getNetworkMagic = 0xf9beb4d9
     , getGenesisHeader =
         BlockHeader
