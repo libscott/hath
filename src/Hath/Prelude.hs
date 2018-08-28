@@ -16,6 +16,7 @@ import Control.Monad.Reader as ALL (ask, asks)
 import Control.Monad.Trans.Class as ALL
 
 import Data.ByteString as ALL (ByteString)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import Data.ByteString.Lazy as ALL (toStrict, fromStrict)
 import Data.ByteString.Short as ALL (toShort, fromShort)
@@ -50,8 +51,11 @@ traceE prefix act = do
     runHath r act `catchAny` log
 
 fromHex :: ByteString -> ByteString
-fromHex bs = let (b,r) = B16.decode bs
-              in if r /= "" then error "Invalid hex" else b
+fromHex bs =
+  if BS.take 2 bs == "0x"
+     then fromHex $ BS.drop 2 bs
+     else let (b,r) = B16.decode bs
+           in if r /= "" then error "Invalid hex" else b
 
 toHex :: ByteString -> ByteString
 toHex = B16.encode

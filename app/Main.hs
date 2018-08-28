@@ -92,7 +92,7 @@ signTxMethod = act <$> argument skArg (metavar "secret key")
 
 decodeTxMethod :: Parser Method
 decodeTxMethod = jsonMethod $ pure $ do
-  (txBin,_) <- B16.decode <$> BS8.getContents
+  txBin <- fromHex <$> BS8.getContents
   let tx = rlpDecode $ rlpDeserialize txBin :: Transaction
   pure $ toJSON tx
 

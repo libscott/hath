@@ -6,6 +6,7 @@ module Hath.Logging
   , logInfo
   , logError
   , logWarn
+  , logTime
   , AsString
   , asString
   ) where
@@ -13,6 +14,8 @@ module Hath.Logging
 import Data.Aeson
 import qualified Data.ByteString.Char8 as BS8
 import Data.ByteString.Lazy (toStrict)
+import Data.Time.Clock
+import Control.Monad.IO.Class as ALL (liftIO, MonadIO)
 import Control.Monad.Logger as LOG hiding (logDebug, logInfo, logError, logWarn)
 
 import Data.String (fromString)
@@ -39,3 +42,14 @@ instance AsString BS8.ByteString where
 
 instance AsString Value where
   asString = asString . toStrict . encode
+
+
+logTime :: (MonadIO m, MonadLogger m) => String -> m a -> m a
+logTime s act = do
+  startTime <- liftIO $ getCurrentTime
+  r <- act
+  endTime <- liftIO $ getCurrentTime
+  let t = diffUTCTime endTime startTime
+  logDebug $ s ++ " took: " ++ (show $ round $ (realToFrac t) * 1000) ++ "ms"
+  pure r
+

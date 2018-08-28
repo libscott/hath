@@ -15,6 +15,7 @@ import           Data.Typeable
 
 import           GHC.Generics
 
+import           Network.HTTP.Simple
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data
 import           Network.Ethereum.RPC
@@ -48,6 +49,10 @@ data ChainConf = CConf
 
 instance FromJSON ChainConf
 instance ToJSON ChainConf
+
+data ConfigException = ConfigException
+  deriving (Show)
+instance Exception ConfigException
 
 data EthNotariser = EthNotariser
   { getKomodoConfig :: BitcoinConfig
@@ -89,9 +94,9 @@ ethNotariser = do
   monitorUTXOs kmdInputAmount 5 ident
 
   run $ do
-    m@chainConf <- getMandateInfos
+    chainConf <- getMandateInfos
 
-    checkNotarySigsPossible m
+    getEthIdent >>= checkConfig chainConf
 
     mutxo <- chooseUtxo <$> bitcoinUtxos [myAddr]
     case mutxo of
@@ -100,6 +105,7 @@ ethNotariser = do
            liftIO $ threadDelay $ 60 * 1000000
          Just utxo -> do
            range <- getBlockRange chainConf
+           logDebug $ "Got block range: " ++ show range
            blocks <- getBlocksInRange range
            if null blocks
               then do
@@ -124,16 +130,20 @@ ethNotariser = do
       pure ()
     handlers =
       [ Handler $ \e -> recover logInfo 5 (e :: ConsensusException)
+      , Handler $ \e -> recover logWarn 60 (e :: HttpException)
+      , Handler $ \e -> recover logError 600 (e :: ConfigException)
       ]
     recover f d e = do
       runHath () $ f $ show e
       threadDelay $ d * 1000000
 
-    checkNotarySigsPossible CConf{..} = do
+    checkConfig CConf{..} (_, addr) = do
       when (majorityThreshold (length chainNotaries) < chainNotarySigs) $ do
-        logError "Bad error: Majority threshold is less than required notary sigs"
-        logError $ show (length chainNotaries, chainNotarySigs)
-        error "Bailing"
+        logError "Majority threshold is less than required notary sigs"
+        impureThrow ConfigException 
+      when (not $ elem addr chainNotaries) $ do
+        logError "I am not in the members list 😢 "
+        impureThrow ConfigException
 
 -- Run consensus if UTXO and block limits are available
 --
@@ -141,8 +151,7 @@ runNotariserConsensus :: BitcoinUtxo -> NotarisationData Sha3
                       -> ChainConf -> Hath EthNotariser ()
 runNotariserConsensus utxo ndata cconf@CConf{..} = do
   (wif, pk, kmdAddr) <- getBitcoinIdent
-  sk <- asks getSecret
-  let ident = (sk, pubKeyAddr $ derivePubKey sk)
+  ident <- getEthIdent
   let cparams = ConsensusParams chainNotaries ident consensusTimeout
   r <- ask
   let run = liftIO . runHath r
@@ -189,7 +198,9 @@ getMandateInfos = do
 
 getBlocksInRange :: (U256, U256) -> Hath EthNotariser [EthBlock]
 getBlocksInRange (from, to) = do
-  forM [from..to] $ \n -> eth_getBlockByNumber n False
+  logTime ("eth_getBlockByNumber: " ++ show (from, to)) $ do
+    parM 10 [from..to] $ \n -> do
+        eth_getBlockByNumber n False
 
 getBlockRange :: ChainConf -> Hath EthNotariser (U256, U256)
 getBlockRange CConf{..} = do
@@ -202,7 +213,7 @@ getBlockRange CConf{..} = do
        Just (NOR{..}) -> do
          let start = fromIntegral blockNumber + 1
          let noop = blockHash :: Sha3 -- clue in type system
-         pure (start, end)
+         pure (start, min end (start+1000))
 
 getEthProposeHeight :: Has GethConfig r => U256 -> Hath r U256
 getEthProposeHeight n = do
@@ -243,6 +254,11 @@ proposeInputs CConf{..} ballots
 
 getBitcoinIdent :: Hath EthNotariser BitcoinIdent
 getBitcoinIdent = deriveBitcoinIdent <$> asks getSecret
+
+getEthIdent :: Hath EthNotariser Ident
+getEthIdent = do
+  sk <- asks getSecret
+  pure (sk, pubKeyAddr $ derivePubKey sk)
 
 chooseUtxo :: [BitcoinUtxo] -> Maybe BitcoinUtxo
 chooseUtxo = listToMaybe . choose
