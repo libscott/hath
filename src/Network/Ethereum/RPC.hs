@@ -1,24 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Network.Ethereum.RPC
-  ( GethConfig(..)
-  , EthBlock(..)
-  , queryEthereum
-  , readCall
-  , postTransactionSync
-  , eth_blockNumber
-  , eth_getBlockByNumber
-  , eth_getTransactionReceipt
-  ) where
+module Network.Ethereum.RPC where
 
 import           Control.Concurrent (threadDelay)
 
 import           Data.Function (fix)
 
+import           GHC.Generics
+
 import           Network.Ethereum.Data
 import           Network.Ethereum.Crypto
-import           Network.Ethereum.Transaction
+import           Network.Ethereum.Transaction as Tx
+import           Network.Ethereum.Types
 
 import           Network.JsonRpc
 
@@ -40,7 +34,7 @@ readCall addr callData =
 postTransactionSync :: Has GethConfig r => Transaction -> Hath r Value
 postTransactionSync tx = do
   logInfo $ "Testing transaction"
-  callResult <- readCall (fromJust $ _to tx) (_data tx)
+  callResult <- readCall (fromJust $ _to tx) (Tx._data tx)
   logInfo $ "Result: " ++ asString (callResult :: Value)
   logInfo $ "Sending transaction: " ++ (show $ txid tx)
   txid <- queryEthereum "eth_sendRawTransaction" [toJSON $ Hex $ encodeTx $ tx]
@@ -67,6 +61,7 @@ data EthBlock = EthBlock
   { ethBlockNumber :: U256
   , ethBlockHash :: Sha3
   , ethBlockReceiptsRoot :: Hex
+  , ethBlockTransactions :: [Sha3]
   } deriving (Show)
 
 instance FromJSON EthBlock where
@@ -75,13 +70,17 @@ instance FromJSON EthBlock where
     EthBlock <$> obj .: "number"
              <*> obj .: "hash"
              <*> obj .: "receiptsRoot"
+             <*> obj .: "transactions"
 
 
-eth_getTransactionReceipt :: Has GethConfig r => Sha3 -> Hath r Value
+eth_getTransactionReceipt :: Has GethConfig r => Sha3 -> Hath r TransactionReceipt
 eth_getTransactionReceipt h = queryEthereum "eth_getTransactionReceipt" [h]
 
 eth_blockNumber :: Has GethConfig r => Hath r U256
 eth_blockNumber = queryEthereum "eth_blockNumber" ()
 
-eth_getBlockByNumber :: Has GethConfig r => U256 -> Bool -> Hath r EthBlock
-eth_getBlockByNumber n b = queryEthereum "eth_getBlockByNumber" (n, b)
+eth_getBlockByHash :: Has GethConfig r => Sha3 -> Hath r EthBlock
+eth_getBlockByHash n = queryEthereum "eth_getBlockByHash" (n, False)
+
+eth_getBlockByNumber :: Has GethConfig r => U256 -> Hath r EthBlock
+eth_getBlockByNumber n = queryEthereum "eth_getBlockByNumber" (n, False)

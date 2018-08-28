@@ -5,6 +5,7 @@ module Network.Ethereum.Crypto.Trie
   , Nibbles
   , hexMapToTrie
   , mapToTrie
+  , stringsToTrie
   , trieProof
   , trieRoot
   ) where

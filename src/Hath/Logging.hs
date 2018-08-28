@@ -33,7 +33,6 @@ logWarn :: MonadLogger m => String -> m ()
 logWarn = logWarnN . fromString
 
 
-
 class AsString a where
   asString :: a -> String
 

@@ -16,6 +16,7 @@ import           TestTrie
 import           TestABI
 import           TestRound
 import           TestKMDNotarisation
+import           TestProof
 
 
 main :: IO ()
@@ -26,6 +27,7 @@ main = defaultMain $ testGroup "All tests"
   , abiTests
   , roundPureTests
   , kmdNotarisationOpReturnTests
+  , proofTests
   ]
 
 

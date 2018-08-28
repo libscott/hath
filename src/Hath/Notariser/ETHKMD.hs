@@ -24,6 +24,7 @@ import qualified Network.Haskoin.Internals as H
 import           Network.Komodo
 
 import           Hath.Config
+import           Hath.Concurrent
 import           Hath.Data.Aeson
 import           Hath.Data.Binary
 import           Hath.Consensus
@@ -200,7 +201,7 @@ getBlocksInRange :: (U256, U256) -> Hath EthNotariser [EthBlock]
 getBlocksInRange (from, to) = do
   logTime ("eth_getBlockByNumber: " ++ show (from, to)) $ do
     parM 10 [from..to] $ \n -> do
-        eth_getBlockByNumber n False
+        eth_getBlockByNumber n
 
 getBlockRange :: ChainConf -> Hath EthNotariser (U256, U256)
 getBlockRange CConf{..} = do

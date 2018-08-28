@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
--- | Code shamelessly taken from https://github.com/blockapps/ethereum-rlp
+-- | Code gratefully borrowed from https://github.com/blockapps/ethereum-rlp
 --
 -- | Copyright 2016 BlockApps, Inc
 -- | 
@@ -222,6 +222,9 @@ instance
   rlpDecode (RLPArray [a,b,c,d,e,f]) = (rlpDecode a, rlpDecode b, rlpDecode c, rlpDecode d, rlpDecode e, rlpDecode f)
   rlpDecode x = error $ "rlpDecode for 6-tuples not defined for " ++ show x
 
+instance RLPSerializable a => RLPSerializable [a] where
+  rlpEncode xs = RLPArray $ rlpEncode <$> xs
+  rlpDecode rlp = error "rlpDecode [a]"
 
 packInteger :: Integer -> B.ByteString
 packInteger = B.pack . integerToBytes

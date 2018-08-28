@@ -5,7 +5,7 @@
 module Network.Komodo where
 
 import           Data.Serialize
-import           Data.ByteString as BS
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8 (concat, pack)
 
 import           Network.Bitcoin

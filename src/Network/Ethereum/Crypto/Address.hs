@@ -12,7 +12,7 @@ import qualified Data.ByteString.Base16 as B16
 import           Data.String
 
 import           Network.Ethereum.Data.ABI
-import           Hath.Data.Hex
+import           Network.Ethereum.Data
 
 import           Hath.Prelude
 
@@ -49,6 +49,9 @@ instance PutABI Address where
 
 instance GetABI Address where
   getABI = Address . BS.drop 12 <$> takeN 32
+
+instance RLPSerializable Address where
+  rlpEncode = rlpEncode . fromAddress
 
 nullAddress :: Address
 nullAddress = "0x0000000000000000000000000000000000000000"
