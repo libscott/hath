@@ -16,6 +16,7 @@ import           Hath.Prelude.Lifted
 
 import qualified Network.Haskoin.Internals as H
 import           Network.HTTP.Simple
+import           Network.JsonRpc
 
 
 type BitcoinIdent = (H.PrvKey, H.PubKey, H.Address)
@@ -34,9 +35,9 @@ data BitcoinConfig =
     } deriving (Show)
 
 
-loadBitcoinConfig :: FilePath -> Hath r BitcoinConfig
+loadBitcoinConfig :: FilePath -> IO BitcoinConfig
 loadBitcoinConfig path = do
-  logInfo $ "Loading bitcoin config: " ++ path
+  runHath () $ logInfo $ "Loading bitcoin config: " ++ path
   configData <- liftIO $ expandPath path >>= BS.readFile
   let p = \p1 p2 -> parseOnly (parseItem p1 p2) configData
   let econfig = do
@@ -56,16 +57,12 @@ parseItem matchName parseVal = do
 queryBitcoin :: (Has BitcoinConfig r, FromJSON a, ToJSON b) => Text -> b -> Hath r a
 queryBitcoin method params = hasReader $ do
   (BitcoinConfig user pass port) <- ask
-  let body = "{jsonrpc,method,params,id}" .% (String "2.0", method, toJSON params, Null)
-      req = setRequestBasicAuth user pass $ 
-            setRequestBodyJSON body $
-            setRequestPort port $ "POST http://localhost/"
-      interpret v = case v .? "{result}" of
-                      Just r  -> pure r
-                      Nothing -> error $ "Unexpected response: " ++ asString v
-  response <- httpJSONEither req
-  traceE ("Bitcoin RPC: " ++ asString body) $
-    either (error . show) interpret $ getResponseBody response
+  let endpoint =
+        HttpEndpoint $
+          setRequestBasicAuth user pass $ 
+          setRequestPort port $ "POST http://localhost/"
+
+  queryJsonRpc endpoint method params
 
 -- Send transaction
 

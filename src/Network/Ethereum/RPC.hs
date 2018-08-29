@@ -24,7 +24,8 @@ import           Hath.Prelude
 
 queryEthereum :: (Has GethConfig r, ToJSON b, FromJSON a) => Text -> b -> Hath r a
 queryEthereum method params = do
-  endpoint <- asks $ gethEndpoint . has
+  uri <- asks $ gethEndpoint . has
+  let endpoint = HttpEndpoint $ fromString uri
   queryJsonRpc endpoint method params
 
 readCall :: (Has GethConfig r, FromJSON a) => Address -> ByteString -> Hath r a

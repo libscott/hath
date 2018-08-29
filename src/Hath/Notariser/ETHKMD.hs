@@ -5,7 +5,6 @@ module Hath.Notariser.ETHKMD where
 import qualified Data.Serialize as Ser
 
 import           Control.Concurrent (forkIO, threadDelay)
-import           Control.Exception.Safe (catchAny)
 import           Control.Monad (forever)
 
 import qualified Data.ByteString as BS
@@ -16,6 +15,7 @@ import           Data.Typeable
 import           GHC.Generics
 
 import           Network.HTTP.Simple
+import           Network.JsonRpc
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data
 import           Network.Ethereum.RPC
@@ -74,16 +74,15 @@ runEthNotariser :: GethConfig -> ConsensusNetworkConfig -> Address -> H.Address 
 runEthNotariser gethConfig consensusConfig mandateAddr kmdAddr = do
   threadDelay 2000000
   initKomodo
-  runHath () $ do
-    bitcoinConf <- loadBitcoinConfig "~/.komodo/komodo.conf"
+  bitcoinConf <- loadBitcoinConfig "~/.komodo/komodo.conf"
+  wif <- runHath bitcoinConf $ queryBitcoin "dumpprivkey" [kmdAddr]
+  -- resolve pk
+  let sk = H.prvKeySecKey $ (fromString wif :: H.PrvKey)
 
-    -- resolve pk
-    wif <- hathReader (const bitcoinConf) $ queryBitcoin "dumpprivkey" [kmdAddr]
-    let sk = H.prvKeySecKey $ (fromString wif :: H.PrvKey)
+  node <- spawnConsensusNode consensusConfig
+  let config = EthNotariser bitcoinConf node gethConfig mandateAddr sk
+  runHath config ethNotariser
 
-    node <- liftIO $ spawnConsensusNode consensusConfig
-    let config = EthNotariser bitcoinConf node gethConfig mandateAddr sk
-    hathReader (const config) ethNotariser
 
 
 -- Run configured notariser
@@ -94,7 +93,7 @@ ethNotariser = do
   logInfo $ "My bitcoin addr:" ++ show myAddr
   monitorUTXOs kmdInputAmount 5 50 ident
 
-  run $ do
+  runForever $ do
     chainConf <- getMandateInfos
 
     getEthIdent >>= checkConfig chainConf
@@ -125,19 +124,6 @@ ethNotariser = do
                    logError $ show (range, ndata, mln)
                    error "Bailing"
   where
-    run act = do
-      r <- ask
-      _ <- liftIO $ forever $ runHath r act `catches` handlers
-      pure ()
-    handlers =
-      [ Handler $ \e -> recover logInfo 5 (e :: ConsensusException)
-      , Handler $ \e -> recover logWarn 60 (e :: HttpException)
-      , Handler $ \e -> recover logError 600 (e :: ConfigException)
-      ]
-    recover f d e = do
-      runHath () $ f $ show e
-      threadDelay $ d * 1000000
-
     checkConfig CConf{..} (_, addr) = do
       when (majorityThreshold (length chainNotaries) < chainNotarySigs) $ do
         logError "Majority threshold is less than required notary sigs"
@@ -145,6 +131,19 @@ ethNotariser = do
       when (not $ elem addr chainNotaries) $ do
         logError "I am not in the members list 😢 "
         impureThrow ConfigException
+
+runForever :: Hath r () -> Hath r ()
+runForever act = forever $ act `catches` handlers
+  where
+    recover f d e = do
+      f $ show e
+      liftIO $ threadDelay $ d * 1000000
+    handlers =
+      [ Handler $ \e -> recover logInfo 5 (e :: ConsensusException)
+      , Handler $ \e -> recover logWarn 60 (e :: HttpException)
+      , Handler $ \e -> recover logWarn 60 (e :: RPCException)
+      , Handler $ \e -> recover logError 600 (e :: ConfigException)
+      ]
 
 -- Run consensus if UTXO and block limits are available
 --

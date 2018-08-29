@@ -7,6 +7,7 @@ import           Data.Conduit.JSON.NewlineDelimited
 import qualified Data.Conduit.List as CL
 import           Data.Conduit.Network
 
+import           Network.HTTP.Client
 import           Network.HTTP.Simple
 import           Network.Socket hiding (send, recv)
 import           Network.Socket.ByteString
@@ -16,21 +17,38 @@ import           Hath.Monad
 import           Hath.Prelude
 
 
+data RPCException =
+    RPCUnexpected String
+  | RPCException String
+  deriving (Show)
+
+instance Exception RPCException
+
+data Endpoint = HttpEndpoint Request | IpcEndpoint FilePath
+
+instance Show Endpoint where
+  show (IpcEndpoint path) = show path
+  show (HttpEndpoint req) = show $ getUri req
+
+
 runJsonRpc :: FromJSON a => Text -> Value -> (Value -> Hath r Value) -> Hath r a
 runJsonRpc method params act = do
   let body = "{jsonrpc,method,params,id}" .% (String "2.0", method, params, Null)
-      interpret v = case (v .? "{error:{message}}", v .? "{result}") of
-                      (Nothing, Just r) -> pure r
-                      (Just e, _)       -> error e
-                      _                 -> error $ "Unexpected response" ++ show v
+      interpretResult (v::Value) =
+        case v .? "." of
+             Nothing -> throw $ RPCUnexpected $ asString v
+             Just r -> pure r
+      interpret v = case (v .? "{error}", v .? "{result}") of
+                      (Nothing, Just r) -> interpretResult r
+                      (Just e, _)       -> throw $ RPCException $ asString (Object (e::Object))
   act body >>= interpret
 
-queryHttp :: String -> Value -> Hath r Value
-queryHttp endpoint body = do
-  let req = setRequestBodyJSON body $ fromString $ "POST " ++ endpoint
-  response <- httpJSONEither req
+queryHttp :: Request -> Value -> Hath r Value
+queryHttp req body = do
+  let reqWithBody = setRequestBodyJSON body req
+  response <- httpJSONEither reqWithBody
   case getResponseBody response of
-       Left e -> error $ show e
+       Left e -> throw $ RPCException (show e)
        Right out -> pure out
 
 queryIpc :: FilePath -> Value -> Hath r Value
@@ -45,8 +63,9 @@ queryIpc endpoint body = do
     runConduit conduit <* close sock
   either error pure out
 
-queryJsonRpc :: (FromJSON a, ToJSON p) => String -> Text -> p -> Hath r a
+queryJsonRpc :: (FromJSON a, ToJSON p) => Endpoint -> Text -> p -> Hath r a
 queryJsonRpc endpoint method params =
   traceE ("Json RPC: " ++ show (endpoint, method, asString $ toJSON params)) $ do
-    let transport = if take 4 endpoint == "http" then queryHttp else queryIpc
-    runJsonRpc method (toJSON params) $ transport endpoint
+    let transport = case endpoint of HttpEndpoint req -> queryHttp req
+                                     IpcEndpoint file -> queryIpc file
+    runJsonRpc method (toJSON params) transport

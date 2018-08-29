@@ -37,8 +37,10 @@ dependencies:
 - directory
 - distributed-process
 - entropy
+- exceptions
 - haskoin-core
 - hassembly-evm
+- http-client
 - http-conduit
 - network
 - network-transport

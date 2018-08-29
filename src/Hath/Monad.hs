@@ -5,12 +5,13 @@
 
 module Hath.Monad where
 
+import           Control.Monad.Catch
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 
 
-newtype Hath r a = Hath (ReaderT r (LoggingT IO) a)
-  deriving (MonadReader r)
+newtype Hath r a = Hath { unHath :: ReaderT r (LoggingT IO) a }
+  deriving (MonadReader r, MonadThrow, MonadCatch)
 
 instance Functor (Hath r) where
   fmap f (Hath a) = Hath $ fmap f a
@@ -30,9 +31,6 @@ instance MonadLogger (Hath r) where
 
 runHath :: r -> Hath r a -> IO a
 runHath r (Hath act) = runStderrLoggingT $ runReaderT act r
-
-unHath :: Hath r a -> ReaderT r (LoggingT IO) a
-unHath (Hath a) = a
 
 hathReader :: (r -> r') -> Hath r' a -> Hath r a
 hathReader f = Hath . withReaderT f . unHath
