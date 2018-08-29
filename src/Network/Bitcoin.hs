@@ -42,7 +42,7 @@ loadBitcoinConfig path = do
   let econfig = do
         user <- p "rpcuser" $ takeTill (inClass " \n")
         password <- p "rpcpassword" $ takeTill (inClass " \n")
-        port <- p "rpcport" decimal
+        port <- either (const $ pure 7771) pure $ p "rpcport" decimal
         pure $ BitcoinConfig user password port
   either error pure econfig
 

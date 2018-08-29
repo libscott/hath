@@ -44,11 +44,11 @@ extra-deps:
 - murmur3-1.0.3
 - pbkdf-1.1.1.1
 - aeson-quick-0.1.2.1
-- git: git@github.com:libscott/secp256k1-haskell.git
+- git: https://github.com/libscott/secp256k1-haskell.git
   commit: c1b25d0
-- git: git@github.com:libscott/hassembly-evm.git
+- git: https://github.com/libscott/hassembly-evm.git
   commit: f1f0f7f0b1480b1e727501a078565e30b384cd80
-- git: git@github.com:haskoin/haskoin.git
+- git: https://github.com/haskoin/haskoin.git
   commit: 3279f5c
   subdirs:
   - haskoin-core
