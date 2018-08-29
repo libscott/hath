@@ -23,7 +23,7 @@ tmux split-window -v -t 1
 tmux split-window -v -t 2
 
 notarise="stack exec hath -- notarise"
-ethkmd="ethkmd --mandate=0xaa5bea0547c895ae5f87979fc278f3ab1c3e795b --seed=localhost:40440"
+ethkmd="ethkmd --mandate=0x8d555026e8952720ebeeda3269833e3626e484eb --seed=localhost:40440"
 
 tmux send-keys -t 3 "$notarise seed --host=localhost --port=40440" Enter
 tmux send-keys -t 1 "$notarise $ethkmd --address=RWgagrqdN7YWH4N6kB4mWCNPCgtAMkCLFp --port=40441 $@" Enter

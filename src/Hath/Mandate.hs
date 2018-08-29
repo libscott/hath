@@ -24,6 +24,11 @@ import           Hath.Monad
 import           Hath.Prelude
 
 
+mandateGetData :: (GetABI a, Has GethConfig r) => Address -> Hath r (a, [Address], U256)
+mandateGetData addr = do
+  unABI <$> readCall addr (abi "getMandate()" ())
+
+
 
 --data Mandate = Mandate
 --  { getAddress :: Address
@@ -33,13 +38,6 @@ import           Hath.Prelude
 --  }
 --
 --
-mandateGetMembers :: Has GethConfig r => Address -> Hath r (Int, [Address])
-mandateGetMembers addr = do
-  unABI <$> readCall addr (abi "getMembers()" ())
-
-mandateGetData :: (GetABI a, Has GethConfig r) => Address -> Hath r a
-mandateGetData addr = do
-  unABI <$> readCall addr (abi "getMandate()" ())
 
 
 --

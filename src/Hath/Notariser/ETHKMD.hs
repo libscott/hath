@@ -164,11 +164,11 @@ runNotariserConsensus utxo ndata cconf@CConf{..} = do
        join in late. Latecomers have no effect on the outcome. -}
 
     -- Step 1 - Key on opret, collect UTXOs
-    run $ logDebug "Step 1: Collect UTXOs"
+    run $ logDebug "Step 1: Collect inputs"
     utxoBallots <- step waitMajority (pk, getOutPoint utxo)
 
     -- Step 2 - TODO: Key on proposer
-    run $ logDebug "Step 2: Get proposed UTXOs"
+    run $ logDebug "Step 2: Get proposed inputs"
     utxosChosen <- propose $ pure $ proposeInputs cconf utxoBallots
 
     -- Step 3 - Sign tx and collect signed inputs
@@ -192,8 +192,7 @@ runNotariserConsensus utxo ndata cconf@CConf{..} = do
 getMandateInfos :: Hath EthNotariser ChainConf
 getMandateInfos = do
   addr <- asks getMandateAddr
-  (_, members) <- mandateGetMembers addr
-  val <- mandateGetData addr
+  (val, members, _) <- mandateGetData addr
   let chainConf = val .! "{ETHKMD}"
   pure chainConf { chainNotaries = members }
 
@@ -214,7 +213,7 @@ getBlockRange CConf{..} = do
        Just (NOR{..}) -> do
          let start = fromIntegral blockNumber + 1
          let noop = blockHash :: Sha3 -- clue in type system
-         pure (start, min end (start+1000))
+         pure (start, min end (start+999))
 
 getEthProposeHeight :: Has GethConfig r => U256 -> Hath r U256
 getEthProposeHeight n = do
