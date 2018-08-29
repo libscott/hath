@@ -15,8 +15,8 @@ import Hath.Prelude.Lifted
 
 
 monitorUTXOs :: Has BitcoinConfig r
-             => Word64 -> Int -> BitcoinIdent -> Hath r ()
-monitorUTXOs amount minimum (sk, pk, address) = do
+             => Word64 -> Int -> Int -> BitcoinIdent -> Hath r ()
+monitorUTXOs amount minimum nsplit (sk, pk, address) = do
   run $ do
     available <- isRightAmount <$> bitcoinUtxos [address]
 
@@ -32,7 +32,7 @@ monitorUTXOs amount minimum (sk, pk, address) = do
     threadDelay $ 30 * 1000000
   where
     isRightAmount = filter ((==amount) . utxoAmount)
-    splits = replicate minimum (H.PayPK pk, amount)
+    splits = replicate nsplit (H.PayPK pk, amount)
     onError e = do
       runHath () $ logError $ show e
       threadDelay $ 30 * 1000000
@@ -59,8 +59,12 @@ makeSplitTx outs = do
   where
     needed = sum $ snd <$> outs
     fee = 10000
-    viable = reverse . sortOn (\c -> ( utxoAmount c > 10^9, utxoConfirmations c, utxoTxid c))
+    viable = reverse . sortOn (\c -> ( utxoAmount c > 10^9
+                                     , utxoConfirmations c * (-1)
+                                     , utxoTxid c
+                                     ))
                      . filter ((>needed+fee) . utxoAmount)
+                     . filter utxoSpendable
     build x =
       let changeSats = utxoAmount x - needed - fee
           changeAddr = H.getAddrHash $ utxoAddress x

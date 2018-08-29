@@ -91,8 +91,8 @@ runEthNotariser gethConfig consensusConfig mandateAddr kmdAddr = do
 ethNotariser :: Hath EthNotariser ()
 ethNotariser = do
   ident@(wif, pk, myAddr) <- getBitcoinIdent
-  logInfo $ "My bitcoin addr: " ++ show myAddr
-  monitorUTXOs kmdInputAmount 5 ident
+  logInfo $ "My bitcoin addr:" ++ show myAddr
+  monitorUTXOs kmdInputAmount 5 50 ident
 
   run $ do
     chainConf <- getMandateInfos

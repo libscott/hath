@@ -90,6 +90,7 @@ data BitcoinUtxo = Utxo
   , utxoTxid :: H.TxHash
   , utxoVout :: Word32
   , utxoAddress :: H.Address
+  , utxoSpendable :: Bool
   } deriving (Show)
 
 instance FromJSON BitcoinUtxo where
@@ -101,6 +102,7 @@ instance FromJSON BitcoinUtxo where
          <*> obj .: "txid"
          <*> obj .: "vout"
          <*> obj .: "address"
+         <*> obj .: "spendable"
 
 getOutPoint :: BitcoinUtxo -> H.OutPoint
 getOutPoint utxo = H.OutPoint (utxoTxid utxo) (utxoVout utxo)
