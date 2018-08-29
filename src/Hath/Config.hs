@@ -23,11 +23,13 @@ optGethConfig = GethConfig <$> strOption
    ( long "geth"
   <> value "http://localhost:8545"
   <> help "Geth endpoint"
+  <> metavar "URL"
   <> showDefault )
 
 optMandate :: Parser Address
 optMandate = option auto
    ( long "mandate"
+  <> metavar "ADDRESS"
   <> help "Mandate contract address 0x..." )
 
 data ConsensusNetworkConfig = CNC
@@ -41,18 +43,19 @@ consensusDefaultPort = 40440
 
 optHost = strOption
    ( long "host"
-  <> value "0.0.0.0"
-  <> showDefault
-  <> help "host to bind to" )
+  <> metavar "IP"
+  <> help "Public IP to bind to" )
 
 optPort = option auto
    ( long "port"
+  <> metavar "NUM"
   <> value consensusDefaultPort
   <> showDefault
-  <> help "port to bind to" )
+  <> help "Port to bind to" )
 
 optSeeds = strOption
    ( long "seed"
+  <> metavar "HOST"
   <> help "ip[:port]" )
 
 optConsensusConfig = CNC <$> optHost <*> optPort <*> some optSeeds

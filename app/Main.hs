@@ -143,7 +143,7 @@ runEthNotariserMethod =
   <$> optGethConfig
   <*> optConsensusConfig
   <*> optMandate
-  <*> strOption ( long "address" <> help "kmd address" )
+  <*> strOption ( long "address" <> help "kmd address" <> metavar "KMD" )
 
 
 runSeedNotariserMethod :: Parser Method
