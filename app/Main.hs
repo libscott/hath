@@ -69,30 +69,26 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
     provingMethods = subparser $
            (command "ethkmd" $ infoH proveEthKmdTransactionMethod $ progDesc "Prove ETH transaction on KMD")
 
-
-jsonArg :: FromJSON a => ReadM a
-jsonArg = eitherReader $ eitherDecode . fromString
-
-
 encodeTxMethod :: Parser Method
 encodeTxMethod =
-  let act = BS8.putStrLn . toHex . encodeTx
-   in act <$> argument jsonArg (metavar "JSON TX")
-
+  let act ma = do
+        tx <- ma 
+        BS8.putStrLn $ ("0x"<>) $ toHex $ encodeTx tx
+   in act <$> optJsonOrStdin (metavar "JSON TX")
 
 signTxMethod :: Parser Method
 signTxMethod = act <$> argument skArg (metavar "secret key")
   where skArg = maybeReader $ secKey . fst . B16.decode . fromString
         act sk = do
-          (txBin,_) <- B16.decode <$> BS8.getContents
+          txBin <- fromHex <$> BS8.getLine
           let tx = rlpDecode $ rlpDeserialize txBin
               signed = signTx tx sk
-          BS8.putStrLn $ toHex $ encodeTx signed
+          BS8.putStrLn $ ("0x"<>) $ toHex $ encodeTx signed
 
 
 decodeTxMethod :: Parser Method
 decodeTxMethod = jsonMethod $ pure $ do
-  txBin <- fromHex <$> BS8.getContents
+  txBin <- fromHex <$> BS8.getLine
   let tx = rlpDecode $ rlpDeserialize txBin :: Transaction
   pure $ toJSON tx
 

@@ -56,3 +56,15 @@ optSeeds = strOption
   <> help "ip[:port]" )
 
 optConsensusConfig = CNC <$> optHost <*> optPort <*> some optSeeds
+
+-- Helpers --------------------------------------------------------------------
+
+jsonArg :: FromJSON a => ReadM a
+jsonArg = eitherReader $ eitherDecode . fromString
+
+optJsonOrStdin :: FromJSON a => Mod ArgumentFields (IO a) -> Parser (IO a)
+optJsonOrStdin props =
+  let d = eitherDecodeStrict
+      f = eitherReader $ \s -> pure <$> d (fromString s)
+      f' = either error id . d <$> BS8.getLine
+   in argument f $ (value f') <> props
