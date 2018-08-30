@@ -10,6 +10,9 @@ import           Hath.Prelude
 
 -- Parallel computation
 
+parM_ :: Int -> [a] -> (a -> Hath r b) -> Hath r ()
+parM_ s i a = parM s i a >> pure ()
+
 parM :: Int -> [a] -> (a -> Hath r b) -> Hath r [b]
 parM initialSlots items act = do
   r <- ask
