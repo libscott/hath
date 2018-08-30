@@ -41,7 +41,6 @@ import Network.Transport.TCP (createTransport, defaultTCPParameters)
 import Control.Applicative
 import Control.Monad
 
-import           Data.Time.Clock
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Set as S
 import Data.Maybe (isJust)
@@ -146,13 +145,13 @@ peerController seeds = do
                            ]
 
 repeatMatch :: Int -> [Match ()] -> Process ()
-repeatMatch usTimeout matches = do
-  startTime <- liftIO getCurrentTime
+repeatMatch timeout matches = do
+  startTime <- getCurrentTime
   fix $ \f -> do
-    t <- diffUTCTime <$> (liftIO getCurrentTime) <*> pure startTime
-    let us = max 0 $ round $ (realToFrac t) * 1000000 + fromIntegral usTimeout
+    d <- timeDelta startTime
+    let us = timeout - d
     when (us > 0) $
-       receiveTimeout us matches >>= maybe (pure ()) (\() -> f)
+       receiveTimeout us matches >>= maybe (pure ()) (const f)
 
 -- ** Discovery
 

@@ -32,7 +32,6 @@ import           Control.Monad.Trans.Maybe
 import qualified Data.ByteString as BS
 import qualified Data.Binary as Bin
 import qualified Data.Map as Map
-import           Data.Time.Clock
 
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data
@@ -123,10 +122,10 @@ permuteTopic = do
 
 waitGeneric :: Serializable a => ([Address] -> Inventory a -> Bool) -> Waiter a
 waitGeneric test recv timeout members = do
-  startTime <- liftIO getCurrentTime
+  startTime <- getCurrentTime
   fix $ \f -> do
-    t <- diffUTCTime startTime <$> liftIO getCurrentTime
-    let us = max 0 $ round $ (realToFrac t) * 1000000 + fromIntegral timeout
+    d <- timeDelta startTime
+    let us = max 0 $ timeout - d
     minv <- receiveChanTimeout us recv
     case minv of
          Nothing -> throw ConsensusTimeout
@@ -143,7 +142,7 @@ waitMajority = waitGeneric haveMajority
 haveMajority :: [Address] -> Inventory a -> Bool
 haveMajority members inv =
   let m = fromIntegral $ length members
-      required = floor (m / 3 * 2) + 1
+      required = floor (m / 2) + 1
    in length inv >= required
 
 majorityThreshold :: Int -> Int

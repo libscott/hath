@@ -7,10 +7,16 @@ module Hath.Prelude.Lifted
   , newEmptyMVar
   , takeMVar
   , putMVar
+
+  , IN.UTCTime
+  , getCurrentTime
+  , timeDelta
   ) where
 
 import qualified Control.Concurrent as IN
 import           Control.Monad.IO.Class
+
+import qualified Data.Time.Clock as IN
 
 
 threadDelay :: MonadIO m => Int -> m ()
@@ -35,3 +41,12 @@ takeMVar = liftIO . IN.takeMVar
 
 putMVar :: MonadIO m => IN.MVar a -> a -> m ()
 putMVar mv = liftIO . IN.putMVar mv
+
+
+getCurrentTime :: MonadIO m => m IN.UTCTime
+getCurrentTime = liftIO IN.getCurrentTime
+
+
+timeDelta :: MonadIO m => IN.UTCTime -> m Int
+timeDelta t = us <$> (IN.diffUTCTime <$> getCurrentTime <*> pure t)
+  where us = round . (*1000000) . realToFrac

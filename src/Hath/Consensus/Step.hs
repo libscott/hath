@@ -20,7 +20,6 @@ import           Data.Binary
 import           Data.Bits
 import qualified Data.Serialize as Ser
 import qualified Data.Map as Map
-import           Data.Time.Clock
 
 import           GHC.Generics (Generic)
 
@@ -110,11 +109,11 @@ onInventoryData = authenticate $ \Step{..} (InventoryData theirInv) -> do
     P2P.nsendPeers topic (mySig, InventoryIndex parent idx)
 
 repeatMatch :: Int -> [Match ()] -> Process ()
-repeatMatch usTimeout matches = do
-  startTime <- liftIO getCurrentTime
+repeatMatch timeout matches = do
+  startTime <- getCurrentTime
   fix $ \f -> do
-    t <- diffUTCTime <$> liftIO getCurrentTime <*> pure startTime
-    let us = max 0 $ round $ (realToFrac t) * 1000000 + fromIntegral usTimeout
+    d <- timeDelta startTime
+    let us = timeout - d
     when (us > 0) $
        receiveTimeout us matches >>= maybe (pure ()) (\() -> f)
 

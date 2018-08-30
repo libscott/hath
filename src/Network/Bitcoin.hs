@@ -46,7 +46,6 @@ loadBitcoinConfig path = do
         port <- either (const $ pure 7771) pure $ p "rpcport" decimal
         pure $ BitcoinConfig user password port
   either error pure econfig
-
  
 parseItem :: Parser ByteString -> Parser a -> Parser a
 parseItem matchName parseVal = do
@@ -61,20 +60,25 @@ queryBitcoin method params = hasReader $ do
         HttpEndpoint $
           setRequestBasicAuth user pass $ 
           setRequestPort port $ "POST http://localhost/"
-
   queryJsonRpc endpoint method params
-
--- Send transaction
 
 bitcoinSubmitTxSync :: Has BitcoinConfig r => H.Tx -> Hath r H.TxHash
 bitcoinSubmitTxSync tx = do
   txid <- queryBitcoin "sendrawtransaction" [tx]
-  threadDelay 500000
-  fix $ \f -> do
-    obj <- queryBitcoin "gettransaction" (txid::H.TxHash, True)
-    if obj .! "{confirmations}" == (1::Int)
-       then pure txid
-       else threadDelay 1000000 >> f
+  let wait height = do
+        block <- queryBitcoin "getblock" [show height]
+        if elem txid $ (block .! "{tx}" :: [H.TxHash])
+           then pure txid
+           else fix $ \f -> do
+             height' <- bitcoinGetHeight
+             if height' /= height
+                then wait height'
+                else threadDelay 5000000 >> f
+  bitcoinGetHeight >>= wait
+
+
+bitcoinGetHeight :: Has BitcoinConfig r => Hath r Int
+bitcoinGetHeight = queryBitcoin "getinfo" () <&> (.!"{blocks}")
 
 -- UTXOs ----------------------------------------------------------------------
 
