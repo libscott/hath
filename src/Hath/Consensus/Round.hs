@@ -141,9 +141,7 @@ waitMajority = waitGeneric haveMajority
 
 haveMajority :: [Address] -> Inventory a -> Bool
 haveMajority members inv =
-  let m = fromIntegral $ length members
-      required = floor (m / 2) + 1
-   in length inv >= required
+   length inv >= majorityThreshold (length members)
 
 majorityThreshold :: Int -> Int
-majorityThreshold m = floor $ fromIntegral m * 2 / 3 + 1
+majorityThreshold m = floor $ (fromIntegral m) / 2 + 1
