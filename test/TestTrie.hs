@@ -4,6 +4,7 @@ module TestTrie where
 
 import           Data.List (nub)
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString as BS
 
 import           Network.Ethereum.Data
 import           Network.Ethereum.Crypto
@@ -48,3 +49,61 @@ trieTests = testGroup "trie"
   , testCase "empty trie" $
       mapToTrie [] @?= N
   ]
+
+
+hexPrefixTests :: TestTree
+hexPrefixTests = testGroup "hexPrefix"
+  [ testCase "go1" $ do
+      hexPrefixDecode "\x12\x34\x56" @?= (False, [2, 3, 4, 5, 6])
+
+  , testCase "go2" $ do
+      hexPrefixDecode "\x12\x34\x5" @?= (False, [2, 3, 4, 0, 5])
+
+  , testCase "go3" $ do
+      hexPrefixDecode "\x20\x0f\x1c\xb8" @?= (True, [0, 15, 1, 12, 11, 8])
+
+  , testCase "go4" $ do
+      hexPrefixEncode [15, 1, 12, 11, 8] True @?= (BS.pack [0x3f, 0x1c, 0xb8])
+
+  , testCase "go5" $ do
+      testIso ([], False) (BS.pack [0x00])
+
+  , testCase "go6" $ do
+      testIso ([], True) (BS.pack [0x20])
+  
+  , testCase "go7" $ do
+      testIso ([1, 2, 3, 4, 5], False) (BS.pack [0x11, 0x23, 0x45])
+
+  , testCase "go8" $ do
+      testIso ([0, 1, 2, 3, 4, 5], False) (BS.pack [0x00, 0x01, 0x23, 0x45])
+
+
+  , testCase "cpp01" $ do
+      testIso ([0,0,1,2,3,4,5], False) $ fromHex "0x10012345"
+  , testCase "cpp02" $ do
+      testIso ([0,1,2,3,4,5], False)   $ fromHex "0x00012345"
+  , testCase "cpp03" $ do
+      testIso ([1,2,3,4,5], False)     $ fromHex "0x112345"
+  , testCase "cpp04" $ do
+      testIso ([0,0,1,2,3,4], False)   $ fromHex "0x00001234"
+  , testCase "cpp05" $ do
+      testIso ([0,1,2,3,4], False)     $ fromHex "0x101234"
+  , testCase "cpp06" $ do
+      testIso ([1,2,3,4], False)       $ fromHex "0x001234"
+  , testCase "cpp07" $ do
+      testIso ([0,0,1,2,3,4,5], True)  $ fromHex "0x30012345"
+  , testCase "cpp08" $ do
+      testIso ([0,0,1,2,3,4], True)    $ fromHex "0x20001234"
+  , testCase "cpp09" $ do
+      testIso ([0,1,2,3,4,5], True)    $ fromHex "0x20012345"
+  , testCase "cpp10" $ do
+      testIso ([1,2,3,4,5], True)      $ fromHex "0x312345"
+  , testCase "cpp11" $ do
+      testIso ([1,2,3,4], True)        $ fromHex "0x201234"
+
+  ]
+
+testIso :: (Nibbles, Bool) -> ByteString -> IO ()
+testIso (n,t) bs = do
+  hexPrefixEncode n t @?= bs
+  hexPrefixDecode bs @?= (t, n)

@@ -24,6 +24,7 @@ main = defaultMain $ testGroup "All tests"
   [ recSigTests
   , contractTests
   , trieTests
+  , hexPrefixTests
   , abiTests
   , roundPureTests
   , kmdNotarisationOpReturnTests
