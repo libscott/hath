@@ -177,15 +177,15 @@ instance Binary NewPeer
 
 doRegister :: PeerState -> ProcessId -> Process ()
 doRegister (PeerState{..}) pid = do
-  modifyMVar_ p2pPeers $ \pids -> do
-    if S.member pid pids
-       then pure pids
-       else do
-         say $ "New peer:" ++ show pid
-         _ <- monitor pid
-         doDiscover $ processNodeId pid
-         nsend peerListenerService $ NewPeer $ processNodeId pid
-         pure $ S.insert pid pids
+  pids <- liftIO $ takeMVar p2pPeers
+  if S.member pid pids
+     then putMVar p2pPeers pids
+     else do
+       say $ "New peer:" ++ show pid
+       _ <- monitor pid
+       putMVar p2pPeers $ S.insert pid pids
+       doDiscover $ processNodeId pid
+       nsend peerListenerService $ NewPeer $ processNodeId pid
 
 
 doUnregister :: PeerState -> Maybe MonitorRef -> ProcessId -> Process ()
