@@ -59,7 +59,7 @@ queryBitcoin method params = hasReader $ do
   let endpoint =
         HttpEndpoint $
           setRequestBasicAuth user pass $ 
-          setRequestPort port $ "POST http://localhost/"
+          setRequestPort port "http://localhost/"
   queryJsonRpc endpoint method params
 
 bitcoinSubmitTxSync :: Has BitcoinConfig r => H.Tx -> Hath r H.TxHash

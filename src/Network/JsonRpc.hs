@@ -45,7 +45,7 @@ runJsonRpc method params act = do
 
 queryHttp :: Request -> Value -> Hath r Value
 queryHttp req body = do
-  let reqWithBody = setRequestBodyJSON body req
+  let reqWithBody = setRequestBodyJSON body $ setRequestMethod "POST" req
   response <- httpJSONEither reqWithBody
   case getResponseBody response of
        Left e -> throw $ RPCException (show e)
