@@ -165,7 +165,10 @@ recvAll :: Serializable a => Process [a]
 recvAll = expectTimeout 0 >>= maybe (pure []) (\a -> (a:) <$> recvAll)
 
 -- Utility
-spawnLocalLink :: Process() -> Process ProcessId
+
+-- Spawns a process and links it to it's parent so that
+-- it will die when it's parent dies
+spawnLocalLink :: Process () -> Process ProcessId
 spawnLocalLink proc = do
   myPid <- getSelfPid
   spawnLocal $ link myPid >> proc

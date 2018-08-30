@@ -26,12 +26,14 @@ instance Read Hex where
 
 instance ToJSON Hex where
   toJSON (Hex bs) = String $ decodeUtf8 $ "0x" <> toHex bs
+  {-# INLINABLE toJSON #-}
 
 instance FromJSON Hex where
   parseJSON val = do
     s <- parseJSON val
     let r = if T.take 2 s == "0x" then T.drop 2 s else s
      in Hex <$> fromJsonHex (String r)
+  {-# INLINABLE parseJSON #-}
 
 
 -- U256 -----------------------------------------------------------------------
@@ -47,6 +49,7 @@ instance FromJSON U256 where
     (pre, body) <- splitAt 2 <$> parseJSON v
     r <- foldl un 0 <$> mapM toDec body
     if pre == "0x" then pure $ U256 r else fail "Invalid hex prefix"
+  {-# INLINABLE parseJSON #-}
 
 instance ToJSON U256 where
   toJSON (U256 n) =
@@ -56,6 +59,7 @@ instance ToJSON U256 where
           where (d,q) = divMod i 16
                 c = hexChar $ fromIntegral q
      in toJSON $ hex n $ if n == 0 then "0" else ""
+  {-# INLINABLE toJSON #-}
 
 instance Show U256 where
   show (U256 i) = show i
