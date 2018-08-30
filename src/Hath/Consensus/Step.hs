@@ -26,6 +26,7 @@ import           GHC.Generics (Generic)
 import           Network.Ethereum.Crypto
 import qualified Hath.Consensus.P2P as P2P
 import           Hath.Consensus.Types
+import           Hath.Consensus.Utils
 import           Hath.Prelude.Lifted
 import           Hath.Prelude
 
@@ -107,15 +108,6 @@ onInventoryData = authenticate $ \Step{..} (InventoryData theirInv) -> do
   when (0 /= idx .&. complement oldIdx) $ do
     yield inv
     P2P.nsendPeers topic (mySig, InventoryIndex parent idx)
-
-repeatMatch :: Int -> [Match ()] -> Process ()
-repeatMatch timeout matches = do
-  startTime <- getCurrentTime
-  fix $ \f -> do
-    d <- timeDelta startTime
-    let us = timeout - d
-    when (us > 0) $
-       receiveTimeout us matches >>= maybe (pure ()) (\() -> f)
 
 buildInventory :: forall a. Serializable a => Step a -> Process ()
 buildInventory Step{..} = do

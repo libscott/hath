@@ -24,7 +24,6 @@ module Hath.Consensus.P2P (
     getCapable,
     nsendPeers,
     nsendCapable,
-    createLocalNode,
     peerController,
     peerListenerService,
     runSeed,
@@ -49,11 +48,16 @@ import Data.Typeable
 
 import Hath.Prelude
 import Hath.Prelude.Lifted
+import Hath.Consensus.Utils
 
 import GHC.Generics (Generic)
 import System.Posix.Signals
 
 -- * Peer-to-peer API
+
+peerControllerService :: String
+peerControllerService = "P2P:Controller"
+
 
 type Peers = S.Set ProcessId
 
@@ -70,6 +74,19 @@ runSeed host port = do
   let ext = const (host, show port)
   node <- createLocalNode host (show port) ext initRemoteTable
   runProcess node $ peerController []
+
+-- | Creates tcp local node which used by 'bootstrap'
+createLocalNode
+  :: HostName
+  -> ServiceName
+  -> (ServiceName -> (HostName, ServiceName))
+  -> RemoteTable
+  -> IO LocalNode
+createLocalNode host port mkExternal rTable = do
+    transport <- either (error . show) id
+                 <$> createTransport host port mkExternal defaultTCPParameters
+    newLocalNode transport rTable
+
 
 -- ** Initialization
 
@@ -96,26 +113,8 @@ waitController :: Process a -> Process a
 waitController prc = do
     res <- whereis peerControllerService
     case res of
-        Nothing -> (liftIO $ threadDelay 100000) >> waitController prc
+        Nothing -> threadDelay 100000 >> waitController prc
         Just _ -> maySay "Bootstrap complete." >> prc
-
--- | Creates tcp local node which used by 'bootstrap'
-createLocalNode
-  :: HostName
-  -> ServiceName
-  -> (ServiceName -> (HostName, ServiceName))
-  -> RemoteTable
-  -> IO LocalNode
-createLocalNode host port mkExternal rTable = do
-    transport <- either (error . show) id
-                 <$> createTransport host port mkExternal defaultTCPParameters
-    newLocalNode transport rTable
-
-peerControllerService :: String
-peerControllerService = "P2P:Controller"
-
-peerListenerService :: String
-peerListenerService = "P2P::Listener"
 
 dumpPeers :: PeerState -> IO ()
 dumpPeers (PeerState mpeers) = do
@@ -135,7 +134,9 @@ peerController seeds = do
     maySay "P2P controller started."
 
     forever $ do
+      say "Discover start"
       mapM_ doDiscover seeds
+      say "Discover end"
       repeatMatch 60000000 [ matchIf isPeerDiscover $ onDiscover state
                            , match $ onMonitor state
                            , match $ onPeerRequest state
@@ -143,40 +144,30 @@ peerController seeds = do
                            , match $ onPeerQuery state
                            , match $ onPeerCapable
                            ]
-
-repeatMatch :: Int -> [Match ()] -> Process ()
-repeatMatch timeout matches = do
-  startTime <- getCurrentTime
-  fix $ \f -> do
-    d <- timeDelta startTime
-    let us = timeout - d
-    when (us > 0) $
-       receiveTimeout us matches >>= maybe (pure ()) (const f)
-
 -- ** Discovery
 
-peerNotifier :: Process ()
-peerNotifier = do
-  getSelfPid >>= register peerListenerService
-  f []
-  where
-    f pids = do
-      let fanout m = forM_ pids $ \p -> send p (m :: NewPeer)
-      receiveWait [ match fanout, match $ f . (:pids) ]
-
--- Goes from a node to a process
+-- 0: A node probes another node
 doDiscover :: NodeId -> Process ()
 doDiscover node = do
     maySay $ "Examining node: " ++ show node
     whereisRemoteAsync node peerControllerService
 
-data NewPeer = NewPeer NodeId
-  deriving (Generic)
+-- 1: Discovery reply, other node's peercontrollerservice
+isPeerDiscover :: WhereIsReply -> Bool
+isPeerDiscover (WhereIsReply service pid) =
+    service == peerControllerService && isJust pid
 
-instance Binary NewPeer
+-- 1.1: Register that peer and ask for their peers
+onDiscover :: PeerState -> WhereIsReply -> Process ()
+onDiscover _     (WhereIsReply _ Nothing) = return ()
+onDiscover state (WhereIsReply _ (Just seedPid)) = do
+    doRegister state False seedPid
+    self <- getSelfPid
+    send seedPid (self, GiveMePeers)
 
-doRegister :: PeerState -> ProcessId -> Process ()
-doRegister (PeerState{..}) pid = do
+-- 1.2: Register
+doRegister :: PeerState -> Bool -> ProcessId -> Process ()
+doRegister (PeerState{..}) rediscover pid = do
   pids <- liftIO $ takeMVar p2pPeers
   if S.member pid pids
      then putMVar p2pPeers pids
@@ -184,47 +175,41 @@ doRegister (PeerState{..}) pid = do
        say $ "New peer:" ++ show pid
        _ <- monitor pid
        putMVar p2pPeers $ S.insert pid pids
-       doDiscover $ processNodeId pid
        nsend peerListenerService $ NewPeer $ processNodeId pid
+       when rediscover $ doDiscover $ processNodeId pid
 
-
-doUnregister :: PeerState -> Maybe MonitorRef -> ProcessId -> Process ()
-doUnregister PeerState{..} mref pid = do
-    maySay $ "Unregistering peer: " ++ show pid
-    maybe (return ()) unmonitor mref
-    modifyMVar_ p2pPeers $ pure . S.delete pid
-
-isPeerDiscover :: WhereIsReply -> Bool
-isPeerDiscover (WhereIsReply service pid) =
-    service == peerControllerService && isJust pid
-
-data GiveMePeers = GiveMePeers
-  deriving (Typeable)
-
-instance Binary GiveMePeers where
-  put GiveMePeers = pure ()
-  get = pure GiveMePeers
-
-onDiscover :: PeerState -> WhereIsReply -> Process ()
-onDiscover _     (WhereIsReply _ Nothing) = return ()
-onDiscover state (WhereIsReply _ (Just seedPid)) = do
-    doRegister state seedPid
+-- 2: When there's a request to share peers
+onPeerRequest :: PeerState -> (ProcessId, GiveMePeers) -> Process ()
+onPeerRequest s@PeerState{..} (peer, _) = do
+    say $ "Peer exchange with " ++ show peer
     self <- getSelfPid
-    send seedPid (self, GiveMePeers)
+    peers <- readMVar p2pPeers
+    send peer (self, peers)
+    --doRegister s peer
 
+-- 3: When peers are received
 onPeerResponse :: PeerState -> (ProcessId, Peers) -> Process ()
 onPeerResponse state (peer, peers) = do
     maySay $ "Got peers from: " ++ show peer
     known <- readMVar $ p2pPeers state
-    mapM_ (doRegister state) (S.toList $ S.difference peers known)
+    mapM_ (doRegister state False) (S.toList $ S.difference peers known)
 
-onPeerRequest :: PeerState -> (ProcessId, GiveMePeers) -> Process ()
-onPeerRequest s@PeerState{..} (peer, _) = do
-    maySay $ "Peer exchange with " ++ show peer
-    self <- getSelfPid
-    peers <- readMVar p2pPeers
-    send peer (self, peers)
-    doRegister s peer
+-- 4: Disconnect
+onMonitor :: PeerState -> ProcessMonitorNotification -> Process ()
+onMonitor PeerState{..} (ProcessMonitorNotification mref pid reason) = do
+    say $ "Unregister peer: " ++ show (pid, reason)
+    maybe (return ()) unmonitor $ Just mref
+    modifyMVar_ p2pPeers $ pure . S.delete pid
+
+
+
+
+
+
+data GiveMePeers = GiveMePeers
+  deriving (Typeable, Generic)
+
+instance Binary GiveMePeers
 
 onPeerQuery :: PeerState -> SendPort Peers -> Process ()
 onPeerQuery PeerState{..} replyTo = do
@@ -238,11 +223,6 @@ onPeerCapable (service, replyTo) = do
     case res of
         Nothing -> maySay "I can't."
         Just pid -> maySay "I can!" >> sendChan replyTo pid
-
-onMonitor :: PeerState -> ProcessMonitorNotification -> Process ()
-onMonitor state (ProcessMonitorNotification mref pid reason) = do
-    say $ "Unregister peer: " ++ show (pid, reason)
-    doUnregister state (Just mref) pid
 
 -- ** Discovery
 
@@ -278,3 +258,27 @@ nsendCapable service msg = getCapable service >>= mapM_ (\pid -> send pid msg)
 
 maySay :: String -> Process ()
 maySay _ = pure ()
+
+
+
+
+--
+
+data NewPeer = NewPeer NodeId
+  deriving (Generic)
+
+instance Binary NewPeer
+
+
+
+peerListenerService :: String
+peerListenerService = "P2P::Listener"
+
+peerNotifier :: Process ()
+peerNotifier = do
+  getSelfPid >>= register peerListenerService
+  f []
+  where
+    f pids = do
+      let fanout m = forM_ pids $ \p -> send p (m :: NewPeer)
+      receiveWait [ match fanout, match $ f . (:pids) ]
