@@ -113,7 +113,7 @@ repeatMatch :: Int -> [Match ()] -> Process ()
 repeatMatch usTimeout matches = do
   startTime <- liftIO getCurrentTime
   fix $ \f -> do
-    t <- diffUTCTime startTime <$> liftIO getCurrentTime
+    t <- diffUTCTime <$> liftIO getCurrentTime <*> pure startTime
     let us = max 0 $ round $ (realToFrac t) * 1000000 + fromIntegral usTimeout
     when (us > 0) $
        receiveTimeout us matches >>= maybe (pure ()) (\() -> f)

@@ -32,7 +32,6 @@ import           Hath.Notariser.UTXOs
 import           Hath.Mandate
 import           Hath.Monad
 import           Hath.Prelude
-import Debug.Trace
 
 
 kmdInputAmount :: Word64
@@ -82,8 +81,6 @@ runEthNotariser gethConfig consensusConfig mandateAddr kmdAddr = do
   node <- spawnConsensusNode consensusConfig
   let config = EthNotariser bitcoinConf node gethConfig mandateAddr sk
   runHath config ethNotariser
-
-
 
 -- Run configured notariser
 --

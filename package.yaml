@@ -61,6 +61,7 @@ dependencies:
 - text
 - time
 - transformers
+- unix
 - unordered-containers
 
 library:

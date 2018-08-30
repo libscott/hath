@@ -25,8 +25,10 @@ newEmptyMVar = liftIO IN.newEmptyMVar
 readMVar :: MonadIO m => IN.MVar a -> m a
 readMVar = liftIO . IN.readMVar
 
-modifyMVar_ :: MonadIO m => IN.MVar a -> (a -> IO a) -> m () 
-modifyMVar_ mv = liftIO . IN.modifyMVar_ mv
+modifyMVar_ :: MonadIO m => IN.MVar a -> (a -> m a) -> m () 
+modifyMVar_ mv act = do
+  d <- takeMVar mv
+  act d >>= putMVar mv
 
 takeMVar :: MonadIO m => IN.MVar a -> m a
 takeMVar = liftIO . IN.takeMVar
