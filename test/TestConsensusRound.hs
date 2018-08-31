@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds, OverloadedStrings #-}
 
-module TestRound where
+module TestConsensusRound where
 
 import           Data.Bits
 import qualified Data.Map as Map
