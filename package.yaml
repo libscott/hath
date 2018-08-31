@@ -79,10 +79,10 @@ executables:
   hath:
     main:                Main.hs
     source-dirs:         app
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+    #ghc-options:
+    #- -threaded
+    #- -rtsopts
+    #- -with-rtsopts=-N
     dependencies:
     - hath
 
@@ -90,10 +90,10 @@ tests:
   hath-test:
     main:                Spec.hs
     source-dirs:         test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+    #ghc-options:
+    #- -threaded
+    #- -rtsopts
+    #- -with-rtsopts=-N
     dependencies:
     - hath
     - tasty

@@ -209,7 +209,7 @@ getBlockRange CConf{..} = do
        Just (NOR{..}) -> do
          let start = fromIntegral blockNumber + 1
          let noop = blockHash :: Sha3 -- clue in type system
-         pure (start, min end (start+999))
+         pure (start, min end (start+99))
 
 getEthProposeHeight :: Has GethConfig r => U256 -> Hath r U256
 getEthProposeHeight n = do

@@ -14,7 +14,7 @@ import           Test.Tasty.HUnit
 import           TestBitcoinContracts
 import           TestTrie
 import           TestABI
-import           TestRound
+import           TestConsensusRound
 import           TestKMDNotarisation
 import           TestProof
 
@@ -27,6 +27,7 @@ main = defaultMain $ testGroup "All tests"
   , hexPrefixTests
   , abiTests
   , roundPureTests
+  , p2pTests
   , kmdNotarisationOpReturnTests
   , proofTests
   ]
