@@ -4,13 +4,10 @@ module Hath.Notariser.ETHKMD where
 
 import qualified Data.Serialize as Ser
 
-import           Control.Concurrent (forkIO, threadDelay)
+import           Control.Concurrent (threadDelay)
 import           Control.Monad (forever)
 
-import qualified Data.ByteString as BS
 import qualified Data.Map as Map
-import           Data.Scientific
-import           Data.Typeable
 
 import           GHC.Generics
 
@@ -69,11 +66,11 @@ instance Has ConsensusNode EthNotariser where has = getNode
 
 -- Entry point for ETH notariser program
 --
-runEthNotariser :: GethConfig -> ConsensusNetworkConfig -> Address -> H.Address -> IO ()
-runEthNotariser gethConfig consensusConfig mandateAddr kmdAddr = do
+runEthNotariser :: GethConfig -> ConsensusNetworkConfig -> Address -> FilePath -> H.Address -> IO ()
+runEthNotariser gethConfig consensusConfig mandateAddr kmdConfPath kmdAddr = do
   threadDelay 2000000
   initKomodo
-  bitcoinConf <- loadBitcoinConfig "~/.komodo/komodo.conf"
+  bitcoinConf <- loadBitcoinConfig kmdConfPath
   wif <- runHath bitcoinConf $ queryBitcoin "dumpprivkey" [kmdAddr]
   -- resolve pk
   let sk = H.prvKeySecKey $ (fromString wif :: H.PrvKey)
@@ -91,11 +88,11 @@ ethNotariser = do
   monitorUTXOs kmdInputAmount 5 50 ident
 
   runForever $ do
+
     chainConf <- getMandateInfos
-
     getEthIdent >>= checkConfig chainConf
-
     mutxo <- chooseUtxo <$> bitcoinUtxos [myAddr]
+
     case mutxo of
          Nothing -> do
            logInfo "Waiting for UTXOs"

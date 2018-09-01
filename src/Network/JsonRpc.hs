@@ -4,13 +4,11 @@ module Network.JsonRpc where
 
 import           Data.Conduit hiding (connect)
 import           Data.Conduit.JSON.NewlineDelimited
-import qualified Data.Conduit.List as CL
 import           Data.Conduit.Network
 
 import           Network.HTTP.Client
 import           Network.HTTP.Simple
 import           Network.Socket hiding (send, recv)
-import           Network.Socket.ByteString
 
 import           Hath.Data.Aeson
 import           Hath.Monad

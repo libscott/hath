@@ -26,6 +26,14 @@ optGethConfig = GethConfig <$> strOption
   <> metavar "URL"
   <> showDefault )
 
+optKmdConfigPath :: Parser String
+optKmdConfigPath = strOption
+   ( long "kmd"
+  <> value "~/.komodo/komodo.conf"
+  <> help "Path to komodo.conf"
+  <> metavar "KMDCONF"
+  <> showDefault )
+
 optMandate :: Parser Address
 optMandate = option auto
    ( long "mandate"

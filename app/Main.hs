@@ -9,7 +9,6 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy.Char8 as C8L
-import qualified Data.Map as Map
 
 import           Options.Applicative
 
@@ -17,21 +16,12 @@ import           Network.Ethereum.Contracts
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data.RLP
 import           Network.Ethereum.Transaction
-import           Network.Komodo
 
 import           Hath.Config
 import           Hath.Consensus.P2P (runSeed)
 import           Hath.Notariser.ETHKMD
-import           Hath.Notariser.ETHProof
 import           Hath.Data.Aeson hiding (Parser)
-import           Hath.Monad
 import           Hath.Prelude
-import qualified Network.Haskoin.Internals as H
-
-import           Language.Evm (codegen)
-
-import           System.Exit
-import           System.IO
 
 
 main :: IO ()
@@ -50,7 +40,6 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
         <> (command "keypair"  $ infoH keyPairMethod     $ progDesc "Generate a priv/pub key pair")
         <> (command "contract" $ infoH contractMethods   $ progDesc "Generate contracts")
         <> (command "notarise" $ infoH notariserMethods  $ progDesc "Notariser modes")
-        <> (command "prove"    $ infoH provingMethods    $ progDesc "Generate proofs")
 
     txMethods = subparser $
            (command "encode"    $ infoH encodeTxMethod    $ progDesc "Encode a json transaction")
@@ -65,9 +54,6 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
     notariserMethods = subparser $
            (command "ethkmd" $ infoH runEthNotariserMethod  $ progDesc "Run ETH -> KMD notariser")
         <> (command "seed"   $ infoH runSeedNotariserMethod $ progDesc "Run notariser seed node")
-
-    provingMethods = subparser $
-           (command "ethkmd" $ infoH proveEthKmdTransactionMethod $ progDesc "Prove ETH transaction on KMD")
 
 encodeTxMethod :: Parser Method
 encodeTxMethod =
@@ -143,17 +129,9 @@ runEthNotariserMethod =
   <$> optGethConfig
   <*> optConsensusConfig
   <*> optMandate
+  <*> optKmdConfigPath
   <*> strOption ( long "address" <> help "kmd address" <> metavar "KMD" )
 
 
 runSeedNotariserMethod :: Parser Method
 runSeedNotariserMethod = runSeed <$> optHost <*> optPort
-
-
-txidArg :: Parser Sha3
-txidArg = argument auto (metavar "TXID")
-
-
-proveEthKmdTransactionMethod :: Parser Method
-proveEthKmdTransactionMethod =
-  proveEthKmdTransaction <$> optGethConfig <*> txidArg

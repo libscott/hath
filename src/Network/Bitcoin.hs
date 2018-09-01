@@ -2,7 +2,6 @@
 
 module Network.Bitcoin where
 
-import qualified Data.Map as Map
 import qualified Data.ByteString as BS
 import           Data.Attoparsec.ByteString.Char8
 import           Data.Scientific
@@ -45,7 +44,9 @@ loadBitcoinConfig path = do
         password <- p "rpcpassword" $ takeTill (inClass " \n")
         port <- either (const $ pure 7771) pure $ p "rpcport" decimal
         pure $ BitcoinConfig user password port
-  either error pure econfig
+  case econfig of
+    Left _ -> error $ "Check config at : " ++ path
+    Right c -> pure c
  
 parseItem :: Parser ByteString -> Parser a -> Parser a
 parseItem matchName parseVal = do

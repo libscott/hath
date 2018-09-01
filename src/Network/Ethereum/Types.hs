@@ -28,6 +28,7 @@ instance RLPSerializable TransactionReceipt where
     , rlpEncode logsBloom
     , rlpEncode logs
     ]
+  rlpDecode = error "rlpSerializable TransactionReceipt undefined"
 
 
 data LogEntry = LogEntry
@@ -49,6 +50,7 @@ instance RLPSerializable LogEntry where
     , rlpEncode topics
     , rlpEncode _data
     ]
+  rlpDecode = error "rlpDecode LogEntry undefined"
 
 
 --

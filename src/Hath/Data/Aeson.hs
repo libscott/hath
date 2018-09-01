@@ -14,7 +14,6 @@ module Hath.Data.Aeson
 import           Data.Aeson as DA hiding (Parser, encode, decode)
 import           Data.Aeson.Types as DA
 import           Data.Aeson.Quick as DA (build, (.?), (.!), (.%))
-import           Data.Aeson.Quick (extract, Structure)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as B16
 import           Data.IORef
@@ -22,8 +21,6 @@ import           Data.HashMap.Strict
 import qualified Data.Set as Set
 import           Data.Text
 import           Data.Text.Encoding
-
-import           Language.Evm
 
 import           System.IO.Unsafe
 

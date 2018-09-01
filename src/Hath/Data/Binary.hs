@@ -9,8 +9,6 @@ import           Data.Binary as ALL
 import qualified Data.Serialize as Ser
 import           Data.Typeable
 
-import           GHC.Generics (Generic)
-
 
 newtype Ser2Bin a = Ser2Bin { unSer2Bin :: a }
   deriving (Typeable, Show)

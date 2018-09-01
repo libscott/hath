@@ -7,21 +7,12 @@
 
 module Hath.Mandate where
 
-import           Control.Distributed.Process.Serializable (Serializable)
-
-import qualified Data.ByteString as BS
-import           Data.Serialize
-import           Data.Typeable
-
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Data
 import           Network.Ethereum.RPC
-import           Network.Ethereum.Transaction
 
 import           Hath.Config
-import           Hath.Data.Aeson
 import           Hath.Monad
-import           Hath.Prelude
 
 
 mandateGetData :: (GetABI a, Has GethConfig r) => Address -> Hath r (a, [Address], U256)

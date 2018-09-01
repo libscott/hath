@@ -8,6 +8,8 @@ module Network.Ethereum.Crypto.Trie
   , stringsToTrie
   , trieProof
   , trieRoot
+  , hexPrefixDecode
+  , hexPrefixEncode
   ) where
 
 import qualified Data.ByteString as BS

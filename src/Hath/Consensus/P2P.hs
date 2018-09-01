@@ -21,28 +21,24 @@ module Hath.Consensus.P2P (
     startP2P,
     makeNodeId,
     getPeers,
-    getCapable,
     nsendPeers,
-    nsendCapable,
     peerController,
     peerListenerService,
     runSeed,
     peerNotifier
 ) where
 
-import Control.Distributed.Process                as DP
-import Control.Distributed.Process.Node           as DPN
+import Control.Distributed.Process
+import Control.Distributed.Process.Node
 import Control.Distributed.Process.Serializable (Serializable)
 import Network.Transport (EndPointAddress(..))
 import Network.Socket (HostName, ServiceName)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
 
-import Control.Applicative
 import Control.Monad
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Set as S
-import Data.Maybe (isJust)
 import Data.Binary
 import Data.Typeable
 
@@ -134,36 +130,27 @@ peerController seeds = do
 
     forever $ do
       mapM_ doDiscover seeds
-      repeatMatch 60000000 [ matchIf isPeerDiscover $ onDiscover state
+      repeatMatch 60000000 [ match $ onDiscover state
                            , match $ onMonitor state
                            , match $ onPeerHello state
                            , match $ onPeerResponse state
                            , match $ onPeerQuery state
-                           , match $ onPeerCapable
                            ]
 -- ** Discovery
 
 -- 0: A node probes another node
 doDiscover :: NodeId -> Process ()
-doDiscover node = do
-    maySay $ "Examining node: " ++ show node
-    whereisRemoteAsync node peerControllerService
-
--- 1: Discovery reply, other node's peercontrollerservice
-isPeerDiscover :: WhereIsReply -> Bool
-isPeerDiscover (WhereIsReply service pid) =
-    service == peerControllerService && isJust pid
+doDiscover node = whereisRemoteAsync node peerControllerService
 
 -- 1.1: Register that peer and ask for their peers
 onDiscover :: PeerState -> WhereIsReply -> Process ()
-onDiscover _     (WhereIsReply _ Nothing) = return ()
-onDiscover state (WhereIsReply _ (Just pid)) =
-  newPeer state pid
+onDiscover state (WhereIsReply service (Just pid))
+  | service == peerControllerService = newPeer state pid
+onDiscover _ _ = pure ()
 
 -- 2: When there's a request to share peers
 onPeerHello :: PeerState -> (ProcessId, Hello) -> Process ()
 onPeerHello s@PeerState{..} (peer, Hello) = do
-    maySay $ "Peer exchange with " ++ show peer
     self <- getSelfPid
     peers <- readMVar p2pPeers
     send peer (self, peers)
@@ -172,7 +159,6 @@ onPeerHello s@PeerState{..} (peer, Hello) = do
 -- 3: When peers are received
 onPeerResponse :: PeerState -> (ProcessId, Peers) -> Process ()
 onPeerResponse state (peer, peers) = do
-    maySay $ "Got peers from: " ++ show peer
     known <- readMVar $ p2pPeers state
     -- Do a discovery here so when we get a response we know the node is up
     mapM_ (doDiscover . processNodeId) $ S.toList $ S.difference peers known
@@ -180,7 +166,7 @@ onPeerResponse state (peer, peers) = do
 -- 4: Disconnect
 onMonitor :: PeerState -> ProcessMonitorNotification -> Process ()
 onMonitor PeerState{..} (ProcessMonitorNotification mref pid reason) = do
-    say $ "Unregister peer: " ++ show (pid, reason)
+    say $ "Dropped peer: " ++ show (pid, reason)
     maybe (return ()) unmonitor $ Just mref
     modifyMVar_ p2pPeers $ pure . S.delete pid
 
@@ -210,16 +196,6 @@ onPeerQuery PeerState{..} replyTo = do
     maySay $ "Local peer query."
     readMVar p2pPeers >>= sendChan replyTo
 
-onPeerCapable :: (String, SendPort ProcessId) -> Process ()
-onPeerCapable (service, replyTo) = do
-    maySay $ "Capability request: " ++ service
-    res <- whereis service
-    case res of
-        Nothing -> maySay "I can't."
-        Just pid -> maySay "I can!" >> sendChan replyTo pid
-
--- ** Discovery
-
 -- | Get a list of currently available peer nodes.
 getPeers :: Process [NodeId]
 getPeers = do
@@ -228,27 +204,9 @@ getPeers = do
     nsend peerControllerService (sp :: SendPort Peers)
     receiveChan rp >>= return . map processNodeId . S.toList
 
--- | Poll a network for a list of specific service providers.
-getCapable :: String -> Process [ProcessId]
-getCapable service = do
-    (sp, rp) <- newChan
-    nsendPeers peerControllerService (service, sp)
-    maySay "Waiting for capable nodes..."
-    go rp []
-
-    where go rp acc = do res <- receiveChanTimeout 100000 rp
-                         case res of Just pid -> maySay "cap hit" >> go rp (pid:acc)
-                                     Nothing -> maySay "cap done" >> return acc
-
--- ** Messaging
-
 -- | Broadcast a message to a specific service on all peers.
 nsendPeers :: Serializable a => String -> a -> Process ()
 nsendPeers service msg = getPeers >>= mapM_ (\peer -> nsendRemote peer service msg)
-
--- | Broadcast a message to a service of on nodes currently running it.
-nsendCapable :: Serializable a => String -> a -> Process ()
-nsendCapable service msg = getCapable service >>= mapM_ (\pid -> send pid msg)
 
 maySay :: String -> Process ()
 maySay _ = pure ()

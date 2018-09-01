@@ -27,7 +27,6 @@ main = defaultMain $ testGroup "All tests"
   , hexPrefixTests
   , abiTests
   , roundPureTests
-  , p2pTests
   , kmdNotarisationOpReturnTests
   , proofTests
   ]

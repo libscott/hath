@@ -52,6 +52,7 @@ instance GetABI Address where
 
 instance RLPSerializable Address where
   rlpEncode = rlpEncode . fromAddress
+  rlpDecode = Address . rlpDecode
 
 nullAddress :: Address
 nullAddress = "0x0000000000000000000000000000000000000000"

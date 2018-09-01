@@ -12,9 +12,7 @@ module Network.Ethereum.Errors
 
 
 import Data.Aeson
-import qualified Data.Map
 import Data.Text
-
 import GHC.Generics
 
 

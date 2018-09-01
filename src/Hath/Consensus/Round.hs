@@ -7,7 +7,6 @@ module Hath.Consensus.Round
   ( ConsensusException(..)
   , step
   , propose
-  , ifProposer
   , say
   , waitMembers
   , waitMajority
@@ -20,28 +19,25 @@ module Hath.Consensus.Round
   , majorityThreshold
   ) where
 
-import           Control.Monad
 import           Control.Monad.Reader
 import           Control.Monad.State
 
-import           Control.Distributed.Process
+import           Control.Distributed.Process hiding (catch)
 import           Control.Distributed.Process.Node
 import           Control.Distributed.Process.Serializable (Serializable)
-import           Control.Monad.Trans.Maybe
 
 import qualified Data.ByteString as BS
 import qualified Data.Binary as Bin
 import qualified Data.Map as Map
 
 import           Network.Ethereum.Crypto
-import           Network.Ethereum.Data
-import           Network.Ethereum.RPC
 
 import           Hath.Prelude
 import           Hath.Prelude.Lifted
 import qualified Hath.Consensus.P2P as P2P
 import           Hath.Consensus.Step
 import           Hath.Consensus.Types
+import           Hath.Consensus.Utils
 
 
 -- Run round ------------------------------------------------------------------
@@ -76,21 +72,34 @@ step waiter o = do
   r <- Map.toAscList <$> step' waiter o
   pure [Ballot a s o | (a, (s, o)) <- r]
 
-propose :: Serializable a => Consensus a -> Consensus a
+-- 1. Determine a starting proposer
+-- 2. Try to get a proposal from them
+-- 3. If there's a timeout, move to the next proposer
+propose :: forall a. Serializable a => Consensus a -> Consensus a
 propose mObj = do
-  (pAddr, isMe) <- determineProposer
-  obj <- if isMe then Just <$> mObj else pure Nothing
-  results <- step' (waitMembers [pAddr]) obj
-  case Map.lookup pAddr results of
-       Just (_, Just obj) -> pure obj
-       _                  -> rePropose
-  where
-  rePropose = do
-    lift $ lift $ say "Proposer missing, trying again"
-    propose mObj
+  determineProposers >>= go
+    where
+      go :: [(Address, Bool)] -> Consensus a
+      go [] = throw ConsensusTimeout
+      go ((pAddr, isMe):xs) = do
 
-determineProposer :: Consensus (Address, Bool)
-determineProposer = do
+        let nextProposer ConsensusTimeout = do
+              lift $ lift $ say $ "Timeout waiting for proposer: " ++ show pAddr
+              go xs
+            nextProposer e = throw e
+
+        obj <- if isMe then Just <$> mObj else pure Nothing
+
+        handle nextProposer $ do
+          results <- step' (waitMembers [pAddr]) obj
+          case Map.lookup pAddr results of
+               Just (_, Just obj2) -> pure obj2
+               _                   -> do
+                 lift $ lift $ say $ "Mischief: missing proposal from: " ++ show pAddr
+                 throw ConsensusTimeout
+
+determineProposers :: Consensus [(Address, Bool)]
+determineProposers = do
   {- This gives fairly good distribution:
   import hashlib
   dist = [0] * 64
@@ -103,14 +112,9 @@ determineProposer = do
   ConsensusParams members (_, myAddr) _ <- ask
   let msg2sum = sum . map fromIntegral . BS.unpack . getMsg
   topic <- get
-  let p = mod (msg2sum topic) (length members)
-      pAddr = members!!p
-  pure $ (pAddr, pAddr == myAddr)
-
-ifProposer :: Consensus () -> Consensus ()
-ifProposer act = do
-  (_, isMe) <- determineProposer
-  when isMe act
+  let i = mod (msg2sum topic) (length members)
+      proposers = take (length members) $ drop i $ cycle members
+  pure $ [(p, p == myAddr) | p <- proposers]
 
 permuteTopic :: Consensus Topic
 permuteTopic = do
@@ -118,7 +122,7 @@ permuteTopic = do
   put $ hashMsg $ getMsg out
   pure out
 
--- Process ----
+-- Check Majority -------------------------------------------------------------
 
 waitGeneric :: Serializable a => ([Address] -> Inventory a -> Bool) -> Waiter a
 waitGeneric test recv timeout members = do

@@ -5,14 +5,11 @@
 module Network.Komodo where
 
 import           Data.Serialize
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as C8 (concat, pack)
 
 import           Network.Bitcoin
 import           Hath.Data.Hex
 import           Network.Haskoin.Block
 import           Network.Haskoin.Constants
-import qualified Network.Haskoin.Internals as H
 
 import           Hath.Data.Aeson
 import qualified Hath.Data.Binary as Bin

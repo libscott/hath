@@ -19,17 +19,17 @@ stack build --fast
 tmux split-window -h \; split-window -h \; select-layout even-horizontal
 
 tmux split-window -v -t 0
-tmux split-window -v -t 1
 tmux split-window -v -t 2
+tmux split-window -v -t 4
 
 notarise="stack exec hath -- notarise"
 ethkmd="ethkmd --mandate=0x8d555026e8952720ebeeda3269833e3626e484eb --seed=127.0.0.1:40440 --host=127.0.0.1"
 
-tmux send-keys -t 3 "$notarise seed --host=127.0.0.1 --port=40440" Enter
-tmux send-keys -t 1 "$notarise $ethkmd --address=RWgagrqdN7YWH4N6kB4mWCNPCgtAMkCLFp --port=40441 $@" Enter
-tmux send-keys -t 2 "$notarise $ethkmd --address=RC2cZ25L6ueuy66WB6MjFEgP14JU2gNxhu --port=40442 $@" Enter
-tmux send-keys -t 4 "$notarise $ethkmd --address=RHPT5v4o6o93eofnPGmD53LK3hTo1WaZEx --port=40443 $@" Enter
-tmux send-keys -t 5 "$notarise $ethkmd --address=RL72qw2ymk56DzXk7mW36VvhiKwWzjggap --port=40444 $@" Enter
+tmux send-keys -t 1 "$notarise seed --host=127.0.0.1 --port=40440" Enter
+tmux send-keys -t 2 "$notarise $ethkmd --address=RWgagrqdN7YWH4N6kB4mWCNPCgtAMkCLFp --port=40441 $1 $2" Enter
+tmux send-keys -t 3 "$notarise $ethkmd --address=RC2cZ25L6ueuy66WB6MjFEgP14JU2gNxhu --port=40442 $1 $2" Enter
+tmux send-keys -t 4 "$notarise $ethkmd --address=RHPT5v4o6o93eofnPGmD53LK3hTo1WaZEx --port=40443 $1 $2" Enter
+tmux send-keys -t 5 "$notarise $ethkmd --address=RL72qw2ymk56DzXk7mW36VvhiKwWzjggap --port=40444 $1 $2" Enter
 
 tmux select-pane -t 0
 

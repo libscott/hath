@@ -5,10 +5,6 @@ module Network.Ethereum.RPC where
 
 import           Control.Concurrent (threadDelay)
 
-import           Data.Function (fix)
-
-import           GHC.Generics
-
 import           Network.Ethereum.Data
 import           Network.Ethereum.Crypto
 import           Network.Ethereum.Transaction as Tx

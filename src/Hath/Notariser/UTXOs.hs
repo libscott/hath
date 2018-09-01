@@ -4,7 +4,6 @@ module Hath.Notariser.UTXOs where
 import Control.Concurrent (forkIO)
 import Control.Exception.Safe (catchAny)
 import Control.Monad.Reader
-import Data.Scientific
 
 import Network.Bitcoin
 import qualified Network.Haskoin.Internals as H

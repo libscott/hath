@@ -7,18 +7,15 @@ module Hath.Consensus.Step
   , prioritiseRemoteInventory
   , dedupeInventoryQueries
   , runStep
-  , spawnLocalLink
   ) where
 
 import           Control.Monad
 
-import           Control.Distributed.Process as DP
-import           Control.Distributed.Process.Node as DPN
+import           Control.Distributed.Process
 import           Control.Distributed.Process.Serializable (Serializable)
 
 import           Data.Binary
 import           Data.Bits
-import qualified Data.Serialize as Ser
 import qualified Data.Map as Map
 
 import           GHC.Generics (Generic)
@@ -157,13 +154,6 @@ recvAll :: Serializable a => Process [a]
 recvAll = expectTimeout 0 >>= maybe (pure []) (\a -> (a:) <$> recvAll)
 
 -- Utility
-
--- Spawns a process and links it to it's parent so that
--- it will die when it's parent dies
-spawnLocalLink :: Process () -> Process ProcessId
-spawnLocalLink proc = do
-  myPid <- getSelfPid
-  spawnLocal $ link myPid >> proc
 
 --signMsg :: Serializable o => Step a -> o -> Authenticated o
 --signMsg Step{..} o =

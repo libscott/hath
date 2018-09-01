@@ -2,10 +2,12 @@
 module Hath.Concurrent where
 
 
+import           Control.Exception (AsyncException(ThreadKilled))
 import           Control.Concurrent
 import           Control.Exception.Safe as E
 import           Control.Monad.IO.Class
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import           Hath.Prelude
 
 -- Parallel computation
@@ -14,30 +16,36 @@ parM_ :: Int -> [a] -> (a -> Hath r b) -> Hath r ()
 parM_ s i a = parM s i a >> pure ()
 
 parM :: Int -> [a] -> (a -> Hath r b) -> Hath r [b]
-parM initialSlots items act = do
+parM slots items act = do
   r <- ask
   mvar <- liftIO $ newEmptyMVar
   parent <- liftIO $ myThreadId
   
   let fork (i,o) = do
         let ef = do
-              res <- runHath r (act o)
-              putMVar mvar (i, res)
-        forkIO $ ef `catchAny` E.throwTo parent
+              myId <- myThreadId
+              let mres = (,,) i <$> myThreadId <*> runHath r (act o)
+              handleAny (pure . Left) $ Right <$> mres
+        let quietly = handleAsync (\ThreadKilled -> pure ())
+        forkIO $ quietly $ ef >>= putMVar mvar
 
-  let run slots rmap rest
-        | slots == initialSlots && null rest = do
+  let run workers rmap rest
+        | Set.null workers && null rest = do
             pure $ snd <$> Map.toAscList rmap
-        | slots > 0 && not (null rest) = do
+        | Set.size workers < slots && not (null rest) = do
             let (j:xs) = rest
-            fork j
-            run (slots-1) rmap xs
+            pid <- fork j
+            run (Set.insert pid workers) rmap xs
         | otherwise = do
-            (i, res) <- takeMVar mvar
-            let nmap = Map.insert i res rmap
-            run (slots+1) nmap rest
+            takeMVar mvar >>=
+              \case Right (i, pid, res) -> do
+                      let nmap = Map.insert i res rmap
+                      run (Set.delete pid workers) nmap rest
+                    Left e -> do
+                      mapM_ killThread $ Set.toList workers
+                      throw e
 
-  liftIO $ run initialSlots Map.empty $ zip [0..] items
+  liftIO $ run Set.empty Map.empty $ zip [0..] items
 
 -- get some blocks: hath $ parM 10 [100000..] $ \n -> (n,) <$> (length . ethBlockTransactions <$> eth_getBlockByNumber n) >>= logInfo . show
 

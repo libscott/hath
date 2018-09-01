@@ -17,25 +17,17 @@ module Network.Ethereum.Crypto
   ) where
 
 
-import           Control.Monad.Fail (MonadFail)
-
-import           Crypto.Hash
 import           Crypto.Secp256k1 as ALL hiding (recover)
 import qualified Crypto.Secp256k1 as Secp256k1
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
-import qualified Data.ByteString.Base16 as B16
 import           Data.Binary
 import           Data.Monoid
-import qualified Data.Text as T
 
 import           Network.Ethereum.Crypto.Address as ALL
 import           Network.Ethereum.Crypto.Hash as ALL
 import           Network.Ethereum.Crypto.Trie as ALL
-import           Network.Ethereum.Data.ABI
-import           Hath.Data.Hex
-import           Network.Ethereum.Data.RLP
 import           Hath.Data.Aeson
 import           Hath.Prelude
 

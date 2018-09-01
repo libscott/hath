@@ -6,10 +6,9 @@ module Hath.Data.Hex
   , U256(..)
   ) where
 
-import           Data.Char (chr, ord)
-import qualified Data.ByteString as BS
 import qualified Data.Text as T
 
+import           Data.Char
 import           Hath.Data.Aeson
 import           Hath.Prelude
 
