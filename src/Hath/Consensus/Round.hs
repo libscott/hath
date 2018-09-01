@@ -84,6 +84,7 @@ propose mObj = do
       go ((pAddr, isMe):xs) = do
 
         let nextProposer ConsensusTimeout = do
+              _ <- permuteTopic  -- Will have been lost due to exception
               lift $ lift $ say $ "Timeout waiting for proposer: " ++ show pAddr
               go xs
             nextProposer e = throw e
