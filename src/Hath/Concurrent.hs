@@ -41,7 +41,7 @@ parM slots items act = do
                       let nmap = Map.insert i res rmap
                       run (Set.delete pid workers) nmap rest
                     Left e -> do
-                      mapM_ killThread $ Set.toList workers
+                      mapM_ killThread workers
                       throw e
 
   liftIO $ run Set.empty Map.empty $ zip [0..] items

@@ -57,7 +57,7 @@ instance FromJSON a => FromJSON (RPCMaybe a) where
 data EthBlock = EthBlock
   { ethBlockNumber :: U256
   , ethBlockHash :: Sha3
-  , ethBlockReceiptsRoot :: Hex
+  , ethBlockReceiptsRoot :: Sha3
   , ethBlockTransactions :: [Sha3]
   } deriving (Show)
 

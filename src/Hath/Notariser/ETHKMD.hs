@@ -238,7 +238,7 @@ getNotarisationData CConf{..} blocks =
       let heights = ethBlockNumber <$> headers
           roots = ethBlockReceiptsRoot <$> headers
           keys = rlpSerialize . rlpEncode . unU256 <$> heights
-       in mapToTrie $ zip keys $ unHex <$> roots
+       in mapToTrie $ zip keys $ unSha3 <$> roots
 
 proposeInputs :: ChainConf -> [Ballot (H.PubKey, H.OutPoint)] -> [(H.PubKey, H.OutPoint)]
 proposeInputs CConf{..} ballots

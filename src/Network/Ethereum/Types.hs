@@ -13,6 +13,7 @@ data TransactionReceipt = Receipt
   { blockHash :: Sha3
   , transactionIndex :: U256
   , gasUsed :: U256
+  , cumulativeGasUsed :: U256
   , root :: Maybe Sha3
   , status :: Maybe U256
   , logsBloom :: Hex
@@ -24,11 +25,11 @@ instance FromJSON TransactionReceipt
 instance RLPSerializable TransactionReceipt where
   rlpEncode Receipt{..} = RLPArray $
     [ maybe (rlpEncode $ fromJust status) rlpEncode root
-    , rlpEncode gasUsed
+    , rlpEncode cumulativeGasUsed
     , rlpEncode logsBloom
     , rlpEncode logs
     ]
-  rlpDecode = error "rlpSerializable TransactionReceipt undefined"
+  rlpDecode = error "rlpDecode TransactionReceipt undefined"
 
 
 data LogEntry = LogEntry

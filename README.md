@@ -7,6 +7,7 @@ Contains at time of writing:
 ## Installation
 
 ```
+$ sudo apt-get install build-essential libtool autoconf
 $ curl -sSL https://get.haskellstack.org/ | sudo sh
 [...] Installed haskell-stack
 $ git clone https://github.com/libscott/hath
