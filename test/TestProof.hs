@@ -51,4 +51,4 @@ proof_100013 = testCase "100013" $ do
 
 
 calcReceiptsRoot :: [TransactionReceipt] -> Trie
-calcReceiptsRoot receipts = stringsToTrie $ rlpSerialize . rlpEncode <$> receipts
+calcReceiptsRoot receipts = orderedTrie $ rlpSerialize . rlpEncode <$> receipts

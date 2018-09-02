@@ -40,7 +40,7 @@ trieTests = testGroup "trie"
 
   , testCase "cpp-ethereum test" $
       let trie = mapToTrie [("a","A"),("b","B")]
-       in toHex (rlpSerialize $ rlpEncode trie) @?= "d716d580c22041c220428080808080808080808080808080"
+       in trieHex trie @?= "d716d580c22041c220428080808080808080808080808080"
 
   , testCase "branch16" $
       let trie = hexMapToTrie [([], "a"), ([1], "b")]
@@ -48,7 +48,20 @@ trieTests = testGroup "trie"
 
   , testCase "empty trie" $
       mapToTrie [] @?= N
+
+  , testCase "orderedTrie0" $ do
+      let trie = orderedTrie ["\1", "\2"]
+      trieHex trie @?= "d5c2310280808080808080c230018080808080808080"
+
+  , testCase "orderedTrie1" $ do
+      -- the trieProof call is a hacky way to get it to hash the other nodes
+      let trie = trieProof [] "" $ orderedTrie ["\2", BS.replicate 33 1]
+      trieHex trie @?= "f3a0c39fbab0f2858a1c2bda8dadedad028c4ed691f23955af87777241a4dad9e2f380808080808080c230028080808080808080"
+      trieRoot trie @?= "68e16fd2af096a850edfc71879cf931ab59e05b2688d450270935020f92387e8"
   ]
+
+trieHex :: Trie -> ByteString
+trieHex = toHex . rlpSerialize . rlpEncode
 
 
 hexPrefixTests :: TestTree

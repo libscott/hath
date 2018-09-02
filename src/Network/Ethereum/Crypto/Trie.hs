@@ -5,7 +5,7 @@ module Network.Ethereum.Crypto.Trie
   , Nibbles
   , hexMapToTrie
   , mapToTrie
-  , stringsToTrie
+  , orderedTrie
   , trieProof
   , trieRoot
   , hexPrefixDecode
@@ -68,6 +68,9 @@ hashNode t =
 trieRoot :: Trie -> Sha3
 trieRoot = sha3 . rlpSerialize . encodeTrie hashNode
 
+-- Sets a bytestring at a given node and encodes all the other nodes
+-- The given bytestring will generally be "", and will be provided when
+-- verifying the proof
 trieProof :: Nibbles -> ByteString -> Trie -> Trie
 trieProof nibs bs (Leaf k _) | nibs == k = Leaf k bs
 trieProof nibs bs (Prefix k t) =
@@ -114,10 +117,16 @@ mapToTrie :: [(ByteString, ByteString)] -> Trie
 mapToTrie pairs = hexMapToTrie $
   sortOn fst $ [(toNibbles k, v) | (k,v) <- pairs]
 
-stringsToTrie :: [ByteString] -> Trie
-stringsToTrie bss = mapToTrie $
+orderedTrie :: [ByteString] -> Trie
+orderedTrie bss = mapToTrie $
   let packKey = rlpSerialize . rlpEncode
    in zip (packKey <$> [0::Integer ..]) bss
+
+-- Set ------------------------------------------------------------------------
+--
+trieSet :: ByteString -> Trie -> Trie
+trieSet key trie = undefined
+
 
 -- Encoding -------------------------------------------------------------------
 --
