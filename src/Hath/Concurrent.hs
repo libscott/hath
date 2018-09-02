@@ -18,8 +18,7 @@ parM_ s i a = parM s i a >> pure ()
 parM :: Int -> [a] -> (a -> Hath r b) -> Hath r [b]
 parM slots items act = do
   r <- ask
-  mvar <- liftIO $ newEmptyMVar
-  parent <- liftIO $ myThreadId
+  mvar <- liftIO newEmptyMVar
   
   let fork (i,o) = do
         let ef = do
@@ -46,6 +45,3 @@ parM slots items act = do
                       throw e
 
   liftIO $ run Set.empty Map.empty $ zip [0..] items
-
--- get some blocks: hath $ parM 10 [100000..] $ \n -> (n,) <$> (length . ethBlockTransactions <$> eth_getBlockByNumber n) >>= logInfo . show
-
