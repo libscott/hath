@@ -73,7 +73,7 @@ bitcoinSubmitTxSync tx = do
            else fix $ \f -> do
              height' <- bitcoinGetHeight
              if height' /= height
-                then wait height'
+                then wait $ height + 1
                 else threadDelay 5000000 >> f
   bitcoinGetHeight >>= wait
 
