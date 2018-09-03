@@ -22,6 +22,7 @@ import           Hath.Config
 import           Hath.Concurrent
 import           Hath.Data.Aeson
 import           Hath.Data.Binary
+import           Hath.Data.Misc
 import           Hath.Consensus
 import           Hath.Notariser.ETHProof
 import           Hath.Notariser.UTXOs
@@ -108,14 +109,6 @@ ethNotariser = do
                 logInfo $ "Notarising range: " ++ show range
                 let ndata = getNotarisationData chainConf blocks
                 runNotariserConsensus utxo ndata chainConf
-
-                -- Consistency check
-                mln <- getLastNotarisation $ chainSymbol chainConf
-                when (mln /= Just ndata) $ do
-                   logError ("Bad error. Notarisation tx confirmed but " ++
-                             "didn't show up in db.")
-                   logError $ show (range, ndata, mln)
-                   error "Bailing"
   where
     checkConfig CConf{..} (_, addr) = do
       when (majorityThreshold (length chainNotaries) < chainNotarySigs) $ do
@@ -175,11 +168,23 @@ runNotariserConsensus utxo ndata cconf@CConf{..} = do
     run $ logDebug "Step 4: Just for kicks"
     _ <- step waitMajority ()
 
-    run $ do
-      logInfo $ "Broadcast transaction: " ++ show (H.txHash finalTx)
-      bitcoinSubmitTxSync finalTx
-      logInfo $ "Transaction confirmed"
-      liftIO $ threadDelay $ 10 * 1000000
+    run $ submitNotarisation cconf ndata finalTx
+
+submitNotarisation :: ChainConf -> NotarisationData Sha3 -> H.Tx -> Hath EthNotariser ()
+submitNotarisation CConf{..} ndata tx = do
+  logInfo $ "Broadcast transaction: " ++ show (H.txHash tx)
+  bitcoinSubmitTxSync tx
+  liftIO $ threadDelay $ 1 * 1000000
+
+  -- Consistency check
+  mln <- getLastNotarisation chainSymbol
+  when (mln /= Just ndata) $ do
+     logError ("Bad error. Notarisation tx confirmed but " ++
+               "didn't show up in db.")
+     logError $ show (ndata, mln)
+     error "Bailing"
+
+  ("Transaction Confirmed! "++) <$> liftIO magic >>= logInfo 
 
 getMandateInfos :: Hath EthNotariser ChainConf
 getMandateInfos = do
@@ -212,6 +217,7 @@ waitOutpoints given = waitGeneric test
           let getOPs = map H.prevOutput . catMaybes . map snd
               vals = getOPs $ Map.elems inv
            in sortOn show vals == sortOn show given
+
 
 -- Building KMD Notarisation TX -----------------------------------------------
 
