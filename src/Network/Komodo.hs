@@ -49,11 +49,11 @@ instance Serialize h => Bin.Binary (NotarisationData h) where
 -- Notarisation RPC
 
 
-findNotarisation :: (Serialize h, Has BitcoinConfig r) => Int -> String ->
-                    Hath r (Maybe (NotarisationData h))
-findNotarisation height symbol = do
-  traceE "findNotarisation" $ do
-    val <- queryBitcoin "scanNotarisationsDB" [show height, symbol, "10000"]
+scanNotarisationsDB :: (Serialize h, Has BitcoinConfig r) => Word32 -> String ->
+                    Word32 -> Hath r (Maybe (NotarisationData h))
+scanNotarisationsDB height symbol limit = do
+  traceE "scanNotarisationsDB" $ do
+    val <- queryBitcoin "scanNotarisationsDB" [show height, symbol, show limit]
     pure $ if val == Null
               then Nothing
               else do
@@ -63,7 +63,7 @@ findNotarisation height symbol = do
 
 getLastNotarisation :: (Serialize h, Has BitcoinConfig r) => String ->
                        Hath r (Maybe (NotarisationData h))
-getLastNotarisation = findNotarisation 0
+getLastNotarisation s = scanNotarisationsDB 0 s 10000
 
 -- Komodo network settings ----------------------------------------------------
 

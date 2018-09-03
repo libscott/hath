@@ -9,6 +9,23 @@ import           Hath.Prelude
 import           Hath.Data.Aeson
 
 
+data EthBlock = EthBlock
+  { ethBlockNumber :: U256
+  , ethBlockHash :: Sha3
+  , ethBlockReceiptsRoot :: Sha3
+  , ethBlockTransactions :: [Sha3]
+  } deriving (Show)
+
+instance FromJSON EthBlock where
+  parseJSON val = do
+    obj <- parseJSON val
+    EthBlock <$> obj .: "number"
+             <*> obj .: "hash"
+             <*> obj .: "receiptsRoot"
+             <*> obj .: "transactions"
+
+
+
 data TransactionReceipt = Receipt
   { blockHash :: Sha3
   , transactionIndex :: U256

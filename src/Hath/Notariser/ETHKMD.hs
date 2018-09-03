@@ -13,9 +13,7 @@ import           GHC.Generics
 
 import           Network.HTTP.Simple
 import           Network.JsonRpc
-import           Network.Ethereum.Crypto
-import           Network.Ethereum.Data
-import           Network.Ethereum.RPC
+import           Network.Ethereum
 import           Network.Bitcoin
 import qualified Network.Haskoin.Internals as H
 import           Network.Komodo
@@ -25,6 +23,7 @@ import           Hath.Concurrent
 import           Hath.Data.Aeson
 import           Hath.Data.Binary
 import           Hath.Consensus
+import           Hath.Notariser.ETHProof
 import           Hath.Notariser.UTXOs
 import           Hath.Mandate
 import           Hath.Monad
@@ -189,12 +188,6 @@ getMandateInfos = do
   let chainConf = val .! "{ETHKMD}"
   pure chainConf { chainNotaries = members }
 
-getBlocksInRange :: (U256, U256) -> Hath EthNotariser [EthBlock]
-getBlocksInRange (from, to) = do
-  logTime ("eth_getBlockByNumber: " ++ show (from, to)) $ do
-    parM 10 [from..to] $ \n -> do
-        eth_getBlockByNumber n
-
 getBlockRange :: ChainConf -> Hath EthNotariser (U256, U256)
 getBlockRange CConf{..} = do
   mlastNota <- getLastNotarisation chainSymbol
@@ -233,12 +226,6 @@ getNotarisationData CConf{..} blocks =
           mom
           (fromIntegral $ length blocks)
           chainCCId
-  where
-    receiptsRootTrieTrie headers =
-      let heights = ethBlockNumber <$> headers
-          roots = ethBlockReceiptsRoot <$> headers
-          keys = rlpSerialize . rlpEncode . unU256 <$> heights
-       in mapToTrie $ zip keys $ unSha3 <$> roots
 
 proposeInputs :: ChainConf -> [Ballot (H.PubKey, H.OutPoint)] -> [(H.PubKey, H.OutPoint)]
 proposeInputs CConf{..} ballots

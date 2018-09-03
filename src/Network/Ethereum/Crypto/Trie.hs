@@ -6,7 +6,9 @@ module Network.Ethereum.Crypto.Trie
   , hexMapToTrie
   , mapToTrie
   , orderedTrie
+  , orderedTrieKey
   , trieProof
+  , execTrieProof
   , trieRoot
   , hexPrefixDecode
   , hexPrefixEncode
@@ -69,8 +71,8 @@ trieRoot :: Trie -> Sha3
 trieRoot = sha3 . rlpSerialize . encodeTrie hashNode
 
 -- Sets a bytestring at a given node and encodes all the other nodes
--- The given bytestring will generally be "", and will be provided when
--- verifying the proof
+-- The given bytestring will generally be "" when creating the proof,
+-- and set to the original payload when verifying
 trieProof :: Nibbles -> ByteString -> Trie -> Trie
 trieProof nibs bs (Leaf k _) | nibs == k = Leaf k bs
 trieProof nibs bs (Prefix k t) =
@@ -78,7 +80,7 @@ trieProof nibs bs (Prefix k t) =
       r = Prefix k $ trieProof b bs t
    in if k == a then r else error $ "Key mismatch: " ++ show (k,nibs)
 trieProof [] bs (Branch16 tries _) = Branch16 (hashNode <$> tries) bs
-trieProof (x:xs) bs (Branch16 tries leaf) = 
+trieProof (x:xs) bs (Branch16 tries leaf) =
   let n i t = if i == x then trieProof xs bs t else hashNode t
       nodes = uncurry n <$> zip [0..] tries
    in Branch16 nodes leaf
@@ -122,11 +124,10 @@ orderedTrie bss = mapToTrie $
   let packKey = rlpSerialize . rlpEncode
    in zip (packKey <$> [0::Integer ..]) bss
 
--- Set ------------------------------------------------------------------------
---
-trieSet :: ByteString -> Trie -> Trie
-trieSet key trie = undefined
-
+orderedTrieKey :: Integral a => a -> Nibbles
+orderedTrieKey i = 
+  let i' = fromIntegral i :: Integer
+   in toNibbles $ rlpSerialize $ rlpEncode i'
 
 -- Encoding -------------------------------------------------------------------
 --

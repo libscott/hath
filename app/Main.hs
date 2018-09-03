@@ -20,6 +20,7 @@ import           Network.Ethereum.Transaction
 import           Hath.Config
 import           Hath.Consensus.P2P (runSeed)
 import           Hath.Notariser.ETHKMD
+import           Hath.Notariser.ETHProof
 import           Hath.Data.Aeson hiding (Parser)
 import           Hath.Prelude
 
@@ -40,6 +41,7 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
         <> (command "keypair"  $ infoH keyPairMethod     $ progDesc "Generate a priv/pub key pair")
         <> (command "contract" $ infoH contractMethods   $ progDesc "Generate contracts")
         <> (command "notarise" $ infoH notariserMethods  $ progDesc "Notariser modes")
+        <> (command "prove"    $ infoH provingMethods    $ progDesc "Generate proofs")
 
     txMethods = subparser $
            (command "encode"    $ infoH encodeTxMethod    $ progDesc "Encode a json transaction")
@@ -54,6 +56,10 @@ parseAct = infoH topMethods $ fullDesc <> progDesc "Blockchain command line util
     notariserMethods = subparser $
            (command "ethkmd" $ infoH runEthNotariserMethod  $ progDesc "Run ETH -> KMD notariser")
         <> (command "seed"   $ infoH runSeedNotariserMethod $ progDesc "Run notariser seed node")
+
+    provingMethods = subparser $
+           (command "ethkmd" $ infoH proveEthKmdTransactionMethod $ progDesc "Prove ETH transaction on KMD")
+
 
 encodeTxMethod :: Parser Method
 encodeTxMethod =
@@ -135,3 +141,11 @@ runEthNotariserMethod =
 
 runSeedNotariserMethod :: Parser Method
 runSeedNotariserMethod = runSeed <$> optHost <*> optPort
+
+txidArg :: Parser Sha3
+txidArg = argument auto (metavar "TXID")
+
+proveEthKmdTransactionMethod :: Parser Method
+proveEthKmdTransactionMethod =
+  runProveEthKmdTransaction <$> optGethConfig <*> optKmdConfigPath <*> txidArg
+

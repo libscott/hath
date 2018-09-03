@@ -53,23 +53,6 @@ instance FromJSON a => FromJSON (RPCMaybe a) where
   parseJSON val = RPCMaybe . Just <$> parseJSON val
 
 
-
-data EthBlock = EthBlock
-  { ethBlockNumber :: U256
-  , ethBlockHash :: Sha3
-  , ethBlockReceiptsRoot :: Sha3
-  , ethBlockTransactions :: [Sha3]
-  } deriving (Show)
-
-instance FromJSON EthBlock where
-  parseJSON val = do
-    obj <- parseJSON val
-    EthBlock <$> obj .: "number"
-             <*> obj .: "hash"
-             <*> obj .: "receiptsRoot"
-             <*> obj .: "transactions"
-
-
 eth_getTransactionReceipt :: Has GethConfig r => Sha3 -> Hath r TransactionReceipt
 eth_getTransactionReceipt h = queryEthereum "eth_getTransactionReceipt" [h]
 
