@@ -99,14 +99,14 @@ ethNotariser = do
            liftIO $ threadDelay $ 60 * 1000000
          Just utxo -> do
            range <- getBlockRange chainConf
-           logDebug $ "Got block range: " ++ show range
+           let nblocks = let (b,e) = range in e - b + 1
+           logInfo $ "Block range: " ++ show range ++ " (" ++ show nblocks ++ " blocks)"
            blocks <- getBlocksInRange range
            if null blocks
               then do
-                logInfo $ "Waiting for more blocks to notarise: " ++ show range
+                logInfo $ "Waiting for more blocks to notarise"
                 liftIO $ threadDelay $ 60 * 1000000
               else do
-                logInfo $ "Notarising range: " ++ show range
                 let ndata = getNotarisationData chainConf blocks
                 runNotariserConsensus utxo ndata chainConf
   where
@@ -184,7 +184,7 @@ submitNotarisation CConf{..} ndata tx = do
      logError $ show (ndata, mln)
      error "Bailing"
 
-  ("Transaction Confirmed! "++) <$> liftIO magic >>= logInfo 
+  ("Transaction Confirmed "++) <$> liftIO magic >>= logInfo
 
 getMandateInfos :: Hath EthNotariser ChainConf
 getMandateInfos = do
