@@ -35,7 +35,7 @@ kmdInputAmount :: Word64
 kmdInputAmount = 9800
 
 consensusTimeout :: Int
-consensusTimeout = 10 * 1000000
+consensusTimeout = 20 * 1000000
 
 data ChainConf = CConf
   { chainCCId :: Word16

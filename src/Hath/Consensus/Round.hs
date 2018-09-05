@@ -46,7 +46,7 @@ runConsensus :: (Serializable a, Has ConsensusNode r) => ConsensusParams
              -> a -> Consensus b -> Hath r b
 runConsensus params topicData act = do
   let topic = hashMsg $ toStrict $ Bin.encode topicData
-      act' = runReaderT (evalStateT act topic) params
+      act' = evalStateT (runReaderT act params) topic
   ConsensusNode node <- asks $ has
   liftIO $ do
     handoff <- newEmptyMVar
@@ -92,12 +92,13 @@ propose mObj = do
         obj <- if isMe then Just <$> mObj else pure Nothing
 
         handle nextProposer $ do
-          results <- step' (waitMembers [pAddr]) obj
-          case Map.lookup pAddr results of
-               Just (_, Just obj2) -> pure obj2
-               _                   -> do
-                 lift $ lift $ say $ "Mischief: missing proposal from: " ++ show pAddr
-                 throw ConsensusTimeout
+          withTimeout (5 * 1000000) $ do
+            results <- step' (waitMembers [pAddr]) obj
+            case Map.lookup pAddr results of
+                 Just (_, Just obj2) -> pure obj2
+                 _                   -> do
+                   lift $ lift $ say $ "Mischief: missing proposal from: " ++ show pAddr
+                   throw ConsensusTimeout
 
 determineProposers :: Consensus [(Address, Bool)]
 determineProposers = do

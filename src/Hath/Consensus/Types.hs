@@ -39,9 +39,13 @@ data ConsensusParams = ConsensusParams
 -- Monad ----------------------------------------------------------------------
 
 type Topic = Msg
-type Consensus = StateT Topic (ReaderT ConsensusParams Process)
+type Consensus = ReaderT ConsensusParams (StateT Topic Process)
 
 data ConsensusException = ConsensusTimeout
                         | ConsensusMischief String
   deriving (Show)
 instance Exception ConsensusException
+
+
+withTimeout :: Int -> Consensus a -> Consensus a
+withTimeout t = withReaderT $ \c -> c { timeout' = t }
