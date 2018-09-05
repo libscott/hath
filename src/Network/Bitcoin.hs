@@ -66,17 +66,12 @@ queryBitcoin method params = hasReader $ do
 bitcoinSubmitTxSync :: Has BitcoinConfig r => H.Tx -> Hath r H.TxHash
 bitcoinSubmitTxSync tx = do
   txid <- queryBitcoin "sendrawtransaction" [tx]
-  let wait height = do
-        block <- queryBitcoin "getblock" [show height]
-        if elem txid $ (block .! "{tx}" :: [H.TxHash])
-           then pure txid
-           else fix $ \f -> do
-             height' <- bitcoinGetHeight
-             if height' /= height
-                then wait $ height + 1
-                else threadDelay 5000000 >> f
-  bitcoinGetHeight >>= wait
-
+  fix $ \f -> do
+    threadDelay 5000000
+    rawtx <- queryBitcoin "getrawtransaction" (txid, 1::Int)
+    case rawtx .? "{confirmations}" of
+         Nothing -> f
+         Just (n::Int) -> if n < 2 then f else pure txid
 
 bitcoinGetHeight :: Has BitcoinConfig r => Hath r Int
 bitcoinGetHeight = queryBitcoin "getinfo" () <&> (.!"{blocks}")
