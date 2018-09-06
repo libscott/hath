@@ -30,6 +30,9 @@ data NotarisationData h = NOR
   , ccId :: Word16
   } deriving (Eq, Show)
 
+momDepth32 :: Integral a => NotarisationData h -> a
+momDepth32 = fromIntegral . momDepth
+
 instance Serialize h => Serialize (NotarisationData h) where
   put NOR{..} = do
     put blockHash >> putWord32le blockNumber
@@ -46,6 +49,11 @@ instance Serialize h => Bin.Binary (NotarisationData h) where
   put = Bin.put . Bin.Ser2Bin
   get = Bin.unSer2Bin <$> Bin.get
 
+instance Serialize h => FromJSON (NotarisationData h) where
+  parseJSON val = do
+    Hex bs <- parseJSON val
+    either fail pure $ decode bs
+
 -- Notarisation RPC
 
 
@@ -56,10 +64,7 @@ scanNotarisationsDB height symbol limit = do
     val <- queryBitcoin "scanNotarisationsDB" [show height, symbol, show limit]
     pure $ if val == Null
               then Nothing
-              else do
-                let bs = unHex $ val .! "{opreturn}" :: ByteString
-                let Right out = decode bs
-                 in Just out
+              else Just $ val .! "{opreturn}"
 
 getLastNotarisation :: (Serialize h, Has BitcoinConfig r) => String ->
                        Hath r (Maybe (NotarisationData h))

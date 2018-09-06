@@ -124,9 +124,10 @@ runForever act = forever $ act `catches` handlers
     recover f d e = do
       f $ show e
       liftIO $ threadDelay $ d * 1000000
+    fmtHttpException (HttpExceptionRequest _ e) = e
     handlers =
       [ Handler $ \e -> recover logInfo 5 (e :: ConsensusException)
-      , Handler $ \e -> recover logWarn 60 (e :: HttpException)
+      , Handler $ \e -> recover logWarn 60 $ fmtHttpException e
       , Handler $ \e -> recover logWarn 60 (e :: RPCException)
       , Handler $ \e -> recover logError 600 (e :: ConfigException)
       ]
