@@ -142,10 +142,11 @@ runEthNotariserMethod =
 runSeedNotariserMethod :: Parser Method
 runSeedNotariserMethod = runSeed <$> optHost <*> optPort
 
-txidArg :: Parser Sha3
-txidArg = argument auto (metavar "TXID")
-
 proveEthKmdTransactionMethod :: Parser Method
 proveEthKmdTransactionMethod =
-  runProveEthKmdTransaction <$> optGethConfig <*> optKmdConfigPath <*> txidArg
+  runProveEthKmdTransaction <$> optGethConfig <*> optKmdConfigPath <*> act
+  where
+    act = proveEthKmdTransaction <$> txidArg <*> symbolArg
+    txidArg = argument auto (metavar "TXID" <> help "Ethereum transaction ID")
+    symbolArg = strArgument (metavar "SYMBOL" <> help "Target chain")
 

@@ -224,6 +224,7 @@ instance
 
 instance RLPSerializable a => RLPSerializable [a] where
   rlpEncode xs = RLPArray $ rlpEncode <$> xs
+  rlpDecode (RLPArray xs) = rlpDecode <$> xs
   rlpDecode rlp = error "rlpDecode [a]"
 
 packInteger :: Integer -> B.ByteString

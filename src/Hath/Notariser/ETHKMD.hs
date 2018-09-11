@@ -179,9 +179,8 @@ submitNotarisation CConf{..} ndata tx = do
 
   -- Consistency check
   mln <- getLastNotarisation chainSymbol
-  when (mln /= Just ndata) $ do
-     logError ("Bad error. Notarisation tx confirmed but " ++
-               "didn't show up in db.")
+  when ((opret <$> mln) /= Just ndata) $ do
+     logError "Bad error. Notarisation tx confirmed but didn't show up in db."
      logError $ show (ndata, mln)
      error "Bailing"
 
@@ -202,7 +201,7 @@ getBlockRange CConf{..} = do
        Nothing -> do
          logInfo $ "No prior notarisations found"
          pure (end, end)
-       Just (NOR{..}) -> do
+       Just (Notarisation _ _ NOR{..}) -> do
          let start = fromIntegral blockNumber + 1
          let noop = blockHash :: Sha3 -- clue in type system
          pure (start, min end (start+99))
