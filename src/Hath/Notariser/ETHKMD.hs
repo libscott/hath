@@ -224,7 +224,7 @@ waitOutpoints given = waitGeneric test
 getNotarisationData :: ChainConf -> [EthBlock] -> NotarisationData Sha3
 getNotarisationData CConf{..} blocks =
   let notarised = last blocks
-      mom = trieRoot $ receiptsRootTrieTrie blocks
+      mom = trieRoot $ ethTrieTrie blocks
   
    in NOR (ethBlockHash notarised)
           (fromIntegral $ ethBlockNumber notarised)

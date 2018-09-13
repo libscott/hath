@@ -120,8 +120,6 @@ instance PutABI Bool where
 instance PutABI Value where
   putABI = putABI . BL.toStrict . encode
 
-
-
 -- Parsing ABI ----------------------------------------------------------------
 --
 

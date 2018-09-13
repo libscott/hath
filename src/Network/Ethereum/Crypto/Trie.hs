@@ -5,11 +5,14 @@ module Network.Ethereum.Crypto.Trie
   , Nibbles
   , hexMapToTrie
   , mapToTrie
+  , trieMapToTrie
   , orderedTrie
   , orderedTrieKey
   , trieProof
   , execTrieProof
+  , hashNode
   , trieRoot
+  , toNibbles
   , hexPrefixDecode
   , hexPrefixEncode
   ) where
@@ -20,12 +23,13 @@ import           Network.Ethereum.Crypto.Hash
 import           Network.Ethereum.Data.RLP
 
 import           Hath.Prelude
+import Debug.Trace
 
 
 type Nibbles = [Word8]
 data Trie = Branch16 [Trie] ByteString
-          | Leaf Nibbles ByteString
           | Prefix Nibbles Trie
+          | Leaf Nibbles ByteString
           | HashNode Sha3
           | N
           deriving (Eq, Show, Read)
@@ -40,10 +44,10 @@ instance RLPSerializable Trie where
 encodeTrie :: (Trie -> Trie) -> Trie -> RLPObject
 encodeTrie aux (Branch16 tries leaf) =
   RLPArray $ map (encodeTrie aux . aux) tries ++ [rlpEncode leaf]
-encodeTrie aux (Prefix k t) =
-  RLPArray [rlpEncode $ hexPrefixEncode k False, encodeTrie aux $ aux t]
 encodeTrie aux (Leaf k bs) =
   RLPArray [rlpEncode $ hexPrefixEncode k True, rlpEncode bs]
+encodeTrie aux (Prefix k t) =
+  RLPArray [rlpEncode $ hexPrefixEncode k False, encodeTrie aux $ aux t]
 encodeTrie _ (HashNode sha) = rlpEncode sha
 encodeTrie _ N = rlpNull
 
@@ -65,7 +69,7 @@ hashNode N = N
 hashNode n@(HashNode _) = n
 hashNode t =
   let ser = rlpSerialize $ encodeTrie hashNode t
-   in if BS.length ser < 32 then t else HashNode $ sha3 $ ser
+   in if BS.length ser < 32 then t else HashNode $ sha3 ser
 
 trieRoot :: Trie -> Sha3
 trieRoot = sha3 . rlpSerialize . encodeTrie hashNode
@@ -73,40 +77,42 @@ trieRoot = sha3 . rlpSerialize . encodeTrie hashNode
 -- Sets a bytestring at a given node and encodes all the other nodes
 -- The given bytestring will generally be "" when creating the proof,
 -- and set to the original payload when verifying
-trieProof :: Nibbles -> ByteString -> Trie -> Trie
-trieProof nibs bs (Leaf k _) | nibs == k = Leaf k bs
-trieProof nibs bs (Prefix k t) =
+trieProof :: Nibbles -> Trie -> Trie -> Trie
+trieProof nibs (Leaf [] bs) (Leaf k _) | nibs == k = Leaf k bs
+trieProof nibs newLeaf (Prefix k t) =
   let (a,b) = splitAt (length k) nibs
-      r = Prefix k $ trieProof b bs t
+      r = Prefix k $ trieProof b newLeaf t
    in if k == a then r else error $ "Key mismatch: " ++ show (k,nibs)
-trieProof [] bs (Branch16 tries _) = Branch16 (hashNode <$> tries) bs
-trieProof (x:xs) bs (Branch16 tries leaf) =
-  let n i t = if i == x then trieProof xs bs t else hashNode t
-      nodes = uncurry n <$> zip [0..] tries
+trieProof [] (Leaf [] bs) (Branch16 tries _) = Branch16 (hashNode <$> tries) bs
+trieProof (x:xs) newLeaf (Branch16 tries leaf) =
+  let n i t = if i == x then trieProof xs newLeaf t else hashNode t
+      nodes = zipWith n [0..] tries
    in Branch16 nodes leaf
-trieProof k bs t = error $
+trieProof k newLeaf t = error $
   "Cannot create proof with key: " ++ show k ++ " of: " ++ show t
 
-execTrieProof :: Nibbles -> ByteString -> Trie -> Sha3
+execTrieProof :: Nibbles -> Trie -> Trie -> Sha3
 execTrieProof n p t = trieRoot $ trieProof n p t
 
 -- Creation -------------------------------------------------------------------
 --
-type HexMap = [(Nibbles, ByteString)]
+type HexMap = [(Nibbles, Trie)]
 
 hexMapToTrie :: HexMap -> Trie
-hexMapToTrie []      = N
-hexMapToTrie [(k,v)] = Leaf k v
-hexMapToTrie xa      =
+hexMapToTrie []       = N
+hexMapToTrie [([],v)] = v
+hexMapToTrie [(k,Leaf [] v)] = Leaf k v
+hexMapToTrie [(k,v)]  = Prefix k v
+hexMapToTrie xa       =
   let sharedPre = longestSharedPrefix $ fst <$> xa
       doPrefix = Prefix sharedPre $ hexMapToTrie $ trimMap (length sharedPre) xa
    in if null sharedPre then do16Node xa else doPrefix
 
 do16Node :: HexMap -> Trie
 do16Node xa@((k,v):xs) =
-   if 0 == length k
-      then Branch16 (do16NodeItems xs 0) v
-      else Branch16 (do16NodeItems xa 0) ""
+  if 0 == length k
+     then Branch16 (do16NodeItems xs 0) (case v of Leaf [] bs -> bs)
+     else Branch16 (do16NodeItems xa 0) ""
 
 do16NodeItems :: HexMap -> Word8 -> [Trie]
 do16NodeItems _     16 = []
@@ -115,9 +121,12 @@ do16NodeItems items i  =
       r = if null part then N else hexMapToTrie (trimMap 1 part)
    in r : do16NodeItems (drop (length part) items) (i+1)
 
-mapToTrie :: [(ByteString, ByteString)] -> Trie
-mapToTrie pairs = hexMapToTrie $
+trieMapToTrie :: [(ByteString, Trie)] -> Trie
+trieMapToTrie pairs = hexMapToTrie $
   sortOn fst $ [(toNibbles k, v) | (k,v) <- pairs]
+
+mapToTrie :: [(ByteString, ByteString)] -> Trie
+mapToTrie pairs = trieMapToTrie [(k, Leaf [] v) | (k,v) <- pairs]
 
 orderedTrie :: [ByteString] -> Trie
 orderedTrie bss = mapToTrie $
