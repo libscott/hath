@@ -146,8 +146,8 @@ proveEthKmdTransactionMethod :: Parser Method
 proveEthKmdTransactionMethod =
   runProveEthKmdTransaction <$> optGethConfig <*> optKmdConfigPath <*> act
   where
-    act = proveEthKmdTransaction <$> symbolArg <*> txidArg <*> kmdTx
+    act = proveEthKmdTransaction <$> symbolArg <*> kmdTx <*> txidArg
     symbolArg = strArgument $ metavar "SYMBOL" <> help "Target symbol"
-    txidArg = argument auto $ metavar "TXID" <> help "Ethereum transaction ID"
     kmdTx = strArgument     $ metavar "KMDTX" <> help "KMD import tx"
+    txidArg = optional $ argument auto $ metavar "TXID" <> help "Ethereum transaction ID"
 

@@ -23,7 +23,7 @@ import Data.ByteString.Short as ALL (toShort, fromShort)
 import Data.Function as ALL (fix)
 import Data.List as ALL (elemIndex, find, findIndex, sort, sortOn)
 import Data.Map as ALL (Map)
-import Data.Maybe as ALL (catMaybes, fromJust, fromMaybe, mapMaybe, listToMaybe)
+import Data.Maybe as ALL (catMaybes, isJust, fromJust, fromMaybe, mapMaybe, listToMaybe)
 import Data.Monoid as ALL
 import Data.Set as ALL (Set)
 import Data.String as ALL (IsString, fromString)

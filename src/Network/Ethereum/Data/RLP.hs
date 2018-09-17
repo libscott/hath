@@ -168,6 +168,9 @@ instance RLPSerializable Integer where
   rlpDecode (RLPString s) = unpackInteger s
   rlpDecode (RLPArray _)  = error "rlpDecode called for Integer for array"
 
+instance RLPSerializable RLPObject where
+  rlpEncode = id
+  rlpDecode = id
 
 instance RLPSerializable B.ByteString where
     rlpEncode x | B.length x == 1 && B.head x < 128 = RLPScalar $ B.head x

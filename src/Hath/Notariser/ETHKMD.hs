@@ -218,7 +218,6 @@ waitOutpoints given = waitGeneric test
               vals = getOPs $ Map.elems inv
            in sortOn show vals == sortOn show given
 
-
 -- Building KMD Notarisation TX -----------------------------------------------
 
 getNotarisationData :: ChainConf -> [EthBlock] -> NotarisationData Sha3

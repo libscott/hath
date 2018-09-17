@@ -2,12 +2,14 @@
 
 module TestProof where
 
+import           Data.Aeson
 import qualified Data.ByteString as BS
-import           Network.Ethereum
+import qualified Data.ByteString.Lazy as BSL
 
 import           Hath.Prelude
-import           Data.Aeson
-import qualified Data.ByteString.Lazy as BSL
+import           Hath.Notariser.ETHProof
+import           Network.Ethereum
+import           Network.Komodo
 
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -20,6 +22,7 @@ proofTests = testGroup "receipt proofs"
   [ proof_100004
   , proof_100013
   , encodeReceipts
+  , testCmpNotarisationRange
   ]
 
 
@@ -82,4 +85,14 @@ encodeReceipts = testGroup "encodeReceipts"
                       , logs = []
                    }
       toHex (rlpSerialize (rlpEncode receipt2)) @?= "f90128a09c9046f595534d3d519d9d5021e39bfe1d9182dbdfd09ee7e50593036248cb6482a8d8b9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c0"
+  ]
+
+
+testCmpNotarisationRange = testGroup "cmpNotarisationRange"
+  [ testCase "ranges" $ do
+      let mockData = NOR () 100 "" () 2 0
+      cmpNotarisationRange mockData <$> [98..101] @?= [LT,EQ,EQ,GT]
+  , testCase "0depth" $ do
+      let mockData = NOR () 100 "" () 0 0
+      cmpNotarisationRange mockData <$> [100,101] @?= [LT,GT]
   ]
