@@ -15,8 +15,6 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.QuickCheck.Instances
 import           Test.Tasty.QuickCheck
-import Debug.Trace
-import Control.Concurrent
 
 
 arbitraryProofTrie :: Gen (Trie, Nibbles, Trie)
