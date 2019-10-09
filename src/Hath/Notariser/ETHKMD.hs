@@ -165,7 +165,7 @@ runNotariserConsensus utxo ndata cconf@CConf{..} = do
     allSignedInputs <- step waitSigs myInput
     let finalTx = compileFinalTx signedTx allSignedInputs
 
-    -- Step 4 - Confirm step 3 (bad attempt to overcome two general's problem)
+    -- Step 4 - Confirm step 3 (bad attempt to overcome two generals problem)
     run $ logDebug "Step 4: Just for kicks"
     _ <- step waitMajority ()
 
