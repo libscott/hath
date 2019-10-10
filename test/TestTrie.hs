@@ -52,7 +52,7 @@ trieTests = testGroup "trie"
   , testCase "orderedTrie0" $ do
       let trie = orderedTrie ["\1", "\2"]
           hex = "d5c2310280808080808080c230018080808080808080"
-      trieHex (traceShowId trie) @?= hex
+      trieHex trie @?= hex
 
   , testCase "orderedTrie1" $ do
       -- the trieProof call is a hacky way to get it to hash the other nodes
