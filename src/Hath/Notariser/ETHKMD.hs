@@ -1,11 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
 
--- This is a notariser which posts merkle state roots from the Ethereum blockchain
--- to Komodo. There are many participants to the process, who each independently
--- calculate a new notarisation state root, and collectively agree on the state
--- root to post to the Komodo blockchain. This was built to facilitate the use case
--- of migrating ERC20 tokens to Komodo side chains.
-
 module Hath.Notariser.ETHKMD where
 
 import qualified Data.Serialize as Ser
@@ -171,7 +165,7 @@ runNotariserConsensus utxo ndata cconf@CConf{..} = do
     allSignedInputs <- step waitSigs myInput
     let finalTx = compileFinalTx signedTx allSignedInputs
 
-    -- Step 4 - Confirm step 3 (bad attempt to overcome two generals problem)
+    -- Step 4 - Confirm step 3 (bad attempt to overcome two general's problem)
     run $ logDebug "Step 4: Just for kicks"
     _ <- step waitMajority ()
 
